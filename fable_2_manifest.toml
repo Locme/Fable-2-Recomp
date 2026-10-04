@@ -38931,9 +38931,12 @@ name = "ProcessAndProcessAndProcess507_82185228"
 
 # Iterate an array of pointers and issue a virtual call on each one (five hundred and eighth form). It takes a structure (a: array of pointers at a->0, a->4, a->8, ...); it iterates over the array (up to 6 entries), and for each valid pointer, issues a virtual call. This is the "process this data" routine (five hundred and eighth form), part of the 0x822A2 process cluster. 148 lines. 0 callees (uses indirect calls). 4 callers (sub_829F8D30, ProcessAndProcessAndProcess506, sub_829F8028, and sub_829F7F88). Strong override in fable2_text_probe.h.
 [entrypoint.functions."0x822A2948"]
-name = "ProcessAndProcessAndProcess508_822A2948"
-
-# Return the byte at offset 96 of a structure (a byte-getter routine). It takes a structure (a: field at a->96) and returns the byte value at a->96. This is a "get byte at offset" routine. 7 lines. 0 callees. 0 callers (unresolved — body is recovered but no callers found; likely a vtable method or indirect entry).
+name = "UITextContainer_ProcessChildren"
+# UI-text container per-frame processor (hooked in fable2_text_probe.h). r3 = container;
+# iterates the up-to-6 child element pointers at container+0..+20. Pass 1 calls each
+# live child's vtable[2] (offset 8, the per-element update). Pass 2 calls each child's
+# vtable[1] (offset 4, a query) and records the index of the first child returning a
+# non-zero low byte. Confirmed on the main-menu render path by the UIR render probe.
 [entrypoint.functions."0x822A9360"]
 name = "GetByteAtOffset96_822A9360"
 
@@ -42226,8 +42229,11 @@ name = "ProcessAndProcessAndProcess1285_82184C68"
 name = "ProcessAndProcessAndProcess1286_82184D38"
 
 # Process a large structure by copying data (seven hundred and one hundred and one hundred and one hundred and one hundred and two hundred and eighty-seventh form). It takes a structure, copies its data (MemCpy), and drives sub-operations (sub_829FA5E8, sub_82A666A8, sub_82BE3F30) based on the result. Part of the 0x82185 process cluster. 317 lines. 4 callees. 1 caller (ProcessAndProcessAndProcess1294).
+# Per-frame front-end input poller: walks the menu input-element list and, when
+# a pending button event is queued, builds the event struct and calls
+# FrontMenu_InputEvent. Fires ~once per frame (30 Hz) while the menu is open.
 [entrypoint.functions."0x82185C90"]
-name = "ProcessAndProcessAndProcess1287_82185C90"
+name = "FrontMenu_PollEventQueue"
 
 # Process a very large data structure by copying data (seven hundred and one hundred and one hundred and one hundred and one hundred and two hundred and eighty-eighth form). It takes a structure, copies its data (MemCpy), and drives sub-operations (ProcessAndProcessAndProcess1091, ProcessAndProcessAndProcess1092, sub_82188F20, sub_829FA5E8) based on the result. Part of the 0x82189 process cluster. 780 lines. 5 callees. 1 caller (ProcessAndProcessAndProcess1294).
 [entrypoint.functions."0x82189058"]
@@ -42415,9 +42421,11 @@ name = "ProcessAndProcessAndProcess1333_82C08DC0"
 
 # Process a structure (seven hundred and one hundred and one hundred and one hundred and one hundred and three hundred and thirty-fourth form). It takes a structure and checks its state, with no external sub-operations. Part of the UI text-rendering cluster in the 0x82C09 region. 102 lines. 0 callees. 1 caller (UIText_RenderElement).
 [entrypoint.functions."0x82C09018"]
-name = "ProcessAndProcessAndProcess1334_82C09018"
-
-# Process a large structure (seven hundred and one hundred and one hundred and one hundred and one hundred and three hundred and thirty-fifth form). It takes a structure and checks its state, with no external sub-operations. Part of the 0x82C12 process cluster. 152 lines. 0 callees. 0 callers.
+name = "UITextElement_Draw"
+# Per-element UI-text draw: called once for every visible element (r3 = element object,
+# r4 = render context). This is the function fable2_text_append.h re-invokes to render
+# appended text through the game's own font pipeline, so it is on the true render path.
+# The vertex shift in the glyph probe is applied right after its state builder.
 [entrypoint.functions."0x82C12D90"]
 name = "ProcessAndProcessAndProcess1335_82C12D90"
 
@@ -42615,9 +42623,11 @@ name = "ProcessAndProcessAndProcess1383_82B69098"
 
 # Process a structure (seven hundred and one hundred and one hundred and one hundred and one hundred and three hundred and eighty-fourth form). It takes a structure, checks its state, and drives sub-operations (sub_82C08F08, sub_82C09680) based on the result. Part of the UI text-rendering cluster in the 0x82C09 region. 68 lines. 2 callees. 1 caller (UIText_RenderElement).
 [entrypoint.functions."0x82C09870"]
-name = "ProcessAndProcessAndProcess1384_82C09870"
-
-# Process a very large data structure (seven hundred and one hundred and one hundred and one hundred and one hundred and three hundred and eighty-fifth form). It takes a structure, enters a critical section (CriticalSection_EnterOrTry), gets a global field (GetGlobalField), and drives many sub-operations (ProcessAndProcessAndProcess1021, ProcessAndProcessAndProcess1066, ProcessAndProcessAndProcess1155, ProcessAndProcessAndProcess1178, ProcessAndProcessAndProcess1179, ProcessAndProcessAndProcess1184, ProcessAndProcessAndProcess1186, ProcessAndProcessAndProcess1214, ProcessAndProcessAndProcess1255, ProcessAndProcessAndProcess264, ProcessAndProcessAndProcess526, ProcessAndProcessAndProcess555, ProcessAndProcessAndProcess653, ProcessAndProcessAndProcess805, sub_821815B0, sub_821A5CB8, sub_821C3CD0, sub_821E2D40, sub_821F4448, ProcessAndProcessAndProcess1382, sub_82263530, sub_822B4D70, sub_822B4E08, sub_822C09E0, ProcessAndProcessAndProcess1388, sub_822E0508, sub_82B38478, sub_82B6C060, sub_82B7CD18, sub_82B9BA58, sub_82BE4D50) based on the result. This is a large dispatcher in the 0x821C3 cluster. 592 lines. 33 callees. 1 caller (ProcessAndProcessAndProcess1389).
+name = "UITextElement_PostQuery"
+# UI-text element query: element.vtable[13] (body loads r31->32, then dispatches
+# r31->vtable[13]). Runs AFTER the vertex-emitting calls, so it is NOT the draw (see
+# fable2_glyph_probe.h, which hooks it and drives the throttled font/glyph-table scan
+# from here). Called once per element after its draw has been emitted.
 [entrypoint.functions."0x821C38C8"]
 name = "ProcessAndProcessAndProcess1385_821C38C8"
 
@@ -43627,9 +43637,10 @@ name = "ProcessAndProcessAndProcess1636_82CE69B8"
 
 # Process a structure (seven hundred and one hundred and one hundred and one hundred and one hundred and three hundred and one hundred and thirty-seventh form). It takes a structure and checks its state, with no external sub-operations. Part of the 0x82B4E process cluster. 15 lines. 0 callees. 0 callers.
 [entrypoint.functions."0x82B4EEE0"]
-name = "ProcessAndProcessAndProcess1637_82B4EEE0"
-
-# Process a large structure by wrapping an element (seven hundred and one hundred and one hundred and one hundred and one hundred and three hundred and one hundred and thirty-eighth form). It takes a structure, accesses an element (ElementAccess), dispatches by type (ProcessAndDispatchByType2), reads or resolves a value (ProcessAndReadOrResolveValue), stores an element (ProcessAndStoreElement2), stores an indexed value (ProcessAndStoreIndexedValue), and drives a sub-operation (sub_82BC68F0) based on the result. Part of the 0x82BDC process cluster. 206 lines. 6 callees. 0 callers.
+name = "UITextElement_DrawDispatch"
+# Tiny tail-call dispatcher on the element draw path: loads r3 = *(r3+16) (a sub-object),
+# then tail-calls r3->vtable[7]. The UIR render probe lists it as the "element draw
+# vtable" entry (see fable2_ui_render_probe.h).
 [entrypoint.functions."0x82BDC380"]
 name = "ProcessAndProcessAndProcess1638_82BDC380"
 
@@ -45355,9 +45366,11 @@ name = "ProcessAndProcessAndProcess2068_82C09FE8"
 
 # Process a large structure by wrapping sub-operations (seven hundred and one hundred and one hundred and one hundred and one hundred and three hundred and two hundred and three hundred and sixty-ninth form). It takes a structure, checks its state, and drives sub-operations (ProcessAndProcessAndProcess2068, sub_82C0A1A0) based on the result. This is a frequently-called helper in the 0x82C0A process cluster. 189 lines. 2 callees. 4 callers (UIText_RenderElement, sub_82C0A590, sub_82C0A988, sub_82C0AA60).
 [entrypoint.functions."0x82C0A230"]
-name = "ProcessAndProcessAndProcess2069_82C0A230"
-
-# Process a very large data structure by inserting a linked-list node (seven hundred and one hundred and one hundred and one hundred and one hundred and three hundred and two hundred and three hundred and seventieth form). It takes a structure, allocates fresh memory (Allocate_OrDbgBreak), frees memory (Free_Thunk), inserts a linked-list node (ListNodeInsert), splices a linked-list node (SpliceListNode), sets a string (SetString), and drives sub-operations (sub_822F1EC0, sub_822F1F00, sub_826C3FA8) based on the result. This is a frequently-called processor in the 0x82C7E process cluster. 451 lines. 8 callees. 2 callers (ProcessAndProcessAndProcess2068 and sub_82C7E470).
+name = "UITextElement_FieldByIndex"
+# Element field getter: r3 = element, r5 = index+1. Returns a pointer to one of four
+# self-fields selected by (r5-1) (case 0 -> r3+12, case 1 -> r3, ...; indices >3 are
+# rejected). A small vertex-emit-path helper on the per-element draw (see
+# fable2_ui_render_probe.h / fable2_text_append.h).
 [entrypoint.functions."0x82C7E138"]
 name = "ProcessAndProcessAndProcess2070_82C7E138"
 
@@ -46655,9 +46668,11 @@ name = "ProcessAndProcessAndProcess2381_82C09368"
 
 # Process a structure by checking its state and driving many sub-operations (two thousand three hundred and eighty-third form). It takes a structure (a: fields at a->64, a->72, and a->68), a value (b), and a value (c); it checks the structure's state, and drives many sub-operations (CheckedCopy, ProcessAndProcessAndProcess1942, and more) based on the result. This is the "process this data" routine (two thousand three hundred and eighty-third form), part of the 0x82C09 process cluster. 179 lines. 2 callees. 2 callers (UIText_RenderElement and sub_82C09C80).
 [entrypoint.functions."0x82C09B50"]
-name = "ProcessAndProcessAndProcess2382_82C09B50"
-
-# Process a structure by checking its state and driving many sub-operations (two thousand three hundred and eighty-fourth form). It takes a structure (a: fields at a->0, a->44, a->136, a->64, and a->60); it checks the structure's state, and drives many sub-operations (Free_Thunk, ProcessAndProcessAndProcess2382, and more) based on the result. This is the "process this data" routine (two thousand three hundred and eighty-fourth form), part of the 0x82C09 process cluster. 153 lines. 2 callees. 1 caller (sub_82C09D88).
+name = "UITextElement_GrowBuffer"
+# Element accumulator: r3 = structure with a growable buffer at self+64/72 and a cursor
+# at self+68. Grows the buffer end (self+72) when r4 exceeds the current span
+# (self+72-self+64), otherwise wraps the cursor (self+68) by the remainder. One of the
+# vertex-emit-path calls on the per-element draw (see fable2_text_append.h).
 [entrypoint.functions."0x82C09C80"]
 name = "ProcessAndProcessAndProcess2383_82C09C80"
 
@@ -47370,8 +47385,12 @@ name = "ProcessAndProcessAndProcess2559_830053D0"
 name = "ProcessAndProcessAndProcess2560_8322BB68"
 
 # Process a value by checking its state and driving many sub-operations (two thousand four hundred and one hundred and twelfth form). It takes a value (a), a structure (b: field at b->0), a mask (c), a value (d), a value (e), and a float (f); it checks the value's state, and drives many sub-operations (GetTimebase, MemCpy_SdkRuntime, ProcessAndProcessAndProcess1934, and more) based on the result. This is the "process this data" routine (two thousand four hundred and one hundred and twelfth form), part of the 0x82188 process cluster. 187 lines. 3 callees. 1 caller (ProcessAndProcessAndProcess1288).
+# Raw press bit-dispatch for the front-end (main) menu: ANDs the currently
+# pressed button mask (r5: Up=1, Down=2, Back=32, A=4096) against the element's
+# supported buttons (r10, u16 at r4) and drives per-button handling. Fires
+# ~twice per physical press (once per menu input element).
 [entrypoint.functions."0x82188F20"]
-name = "ProcessAndProcessAndProcess2561_82188F20"
+name = "FrontMenu_PressBitDispatch"
 
 # Process a structure by checking its state (two thousand four hundred and one hundred and thirteenth form). It takes a structure (a: field at a->12) and a flag (b); it checks the structure's state, and sets or clears a bit in the structure based on the flag. This is the "process this data" routine (two thousand four hundred and one hundred and thirteenth form), part of the 0x82C5C process cluster. 15 lines. 0 callees. 3 callers (sub_82C5A780, sub_82C5CC60, and sub_82C5A950).
 [entrypoint.functions."0x82C5C748"]
@@ -47662,8 +47681,11 @@ name = "ProcessAndProcessAndProcess2632_82C21028"
 name = "ProcessAndProcessAndProcess2633_82C21190"
 
 # Process a value by checking its state and driving many sub-operations (two thousand four hundred and one hundred and eighty-fifth form). It takes a value (a), a value (b), a structure (c: field at c->16), and a value (d); it checks the value's state, and drives many sub-operations (ProcessBinarySearch, Allocate_OrDbgBreak, ConstructAndIncrementCounter, and more) based on the result. This is the "process this data" routine (two thousand four hundred and one hundred and eighty-fifth form), part of the 0x82C21 process cluster. 400 lines. 16 callees. 0 callers (vtable-dispatched).
+# Get-or-create front-end UI element node: binary-searches an element table by
+# key and constructs a fresh node (with refcounted sub-objects) if absent.
+# Fires on effective menu actions (selection change / activation).
 [entrypoint.functions."0x82C217B8"]
-name = "ProcessAndProcessAndProcess2634_82C217B8"
+name = "FrontMenu_EnsureElement"
 
 # Process a value by checking its state and driving many sub-operations (two thousand four hundred and one hundred and eighty-sixth form). It takes a structure (a: fields at a->4, a->0, a->16, and a->8); it checks the value's state, and drives many sub-operations (Free_Thunk, ProcessAndProcessAndProcess1811, and more) based on the result, looping over elements. This is the "process this data" routine (two thousand four hundred and one hundred and eighty-sixth form), part of the 0x82C22 process cluster. 137 lines. 2 callees. 1 caller (sub_82C23198).
 [entrypoint.functions."0x82C22EC8"]
@@ -48985,3 +49007,10 @@ name = "LuaScriptError_FormatMessage_825ADB40"
 # script code (e.g. EScriptableAction tables).
 [entrypoint.functions."0x82514818"]
 name = "RegisterActionEffectTypeStrings_82514818"
+
+# Main-menu input event handler (one call per pending UI button press:
+# Up/Down/A/Back, incl. clamped presses). Called from
+# ProcessAndProcessAndProcess1287_82185C90 (per-frame event queue poller).
+# Named for the mod-menu hook (see src/diagnostics/fable2_modmenu.h).
+[entrypoint.functions."0x82BE3F30"]
+name = "FrontMenu_InputEvent"

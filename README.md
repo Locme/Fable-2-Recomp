@@ -366,8 +366,9 @@ Commands: `ping`, `info`, `auth`, `press` (`input`, `hold_ms`, `value`),
 `release`, `stick` (`input` = `StkLx`/`StkLy`/`StkRx`/`StkRy`, `value`,
 `hold_ms`), `state` (sticky baseline: `buttons[]`, `triggers{LT,RT}`,
 `stk{lx,ly,rx,ry}`), `clear`, `script` (atomic timed sequence), `get_state`,
-`game_state` (current boot/menu state, see below), `cvar` (get/set any cvar
-by name), `enable`/`disable`. Input names match the
+`game_state` (current boot/menu state, see below), `screenshot` (`path`; save
+the current game frame as a PNG, see below), `cvar` (get/set any
+cvar by name), `enable`/`disable`. Input names match the
 keyboard-gamepad vocabulary (`A`/`B`/`X`/`Y`, `LB`/`RB`, `LT`/`RT`,
 `Up`/`Down`/`Left`/`Right`, `Start`/`Back`, `L3`/`R3`, stick direction
 shorthands). `StkLy` positive = forward (Fable 2 convention). `script` is a
@@ -408,6 +409,27 @@ its exact timestamp. State changes are logged to the in-game logger
 (`REXSYS_INFO`, same channel as the remote control) on transition only, and
 every sample is written to `fable2_state_probe.log` when
 `FABLE2_STATE_PROBE=1` is set.
+
+### Screenshot
+
+`screenshot` saves the **current game frame** as a PNG so the AI harness can
+see what the game is showing:
+
+```
+python tools\fable2_control.py screenshot shots/after_jump.png
+> {"cmd":"screenshot","path":"C:/shots/after_jump.png"}
+< {"ok":true,"path":"C:/shots/after_jump.png","width":1280,"height":720,"bytes":2765798,"avg_luma":120}
+```
+
+`path` (required, UTF-8) is where the PNG is written; parent directories are
+created automatically. The frame is read **in-process from the renderer's guest
+output texture** — the exact frame the game just rendered, in GPU memory at the
+guest's native resolution (1280x720 for Fable 2) — not from the desktop. So the
+picture is the complete game frame even while other windows cover it or the game
+is unfocused, and occluding windows never appear in it. Works with both the D3D12
+and Vulkan GPU plugins (each implements `CaptureGuestOutput`). Each capture
+blocks the connection for a few hundred milliseconds. Implementation:
+`src/diagnostics/fable2_frame_capture.h`.
 
 Config (`[remote]` in `fable2_config.toml`): `enabled` (default `true`),
 `host` (`127.0.0.1`; `0.0.0.0` exposes it on all interfaces), `port`

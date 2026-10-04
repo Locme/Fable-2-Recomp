@@ -53,6 +53,24 @@ void record_a_press(std::int64_t ms);
 #include "xex_verify.h"
 #include "game_branding.h"
 
+namespace {
+// The `screenshot` command reads the game's rendered frame from the renderer's
+// presenter, but rex::ui::Window keeps presenter() protected. Window is a
+// non-final polymorphic base with Window as its only/first base, and
+// presenter() is a non-virtual inline that merely returns the presenter_
+// pointer - so the standard derived-class accessor idiom (reinterpret to a
+// first-base-derived type) safely reads the member without touching any
+// vtable. This keeps the fix self-contained in the app (no SDK edits).
+class WindowPresenterAccessor final : public rex::ui::Window {
+ public:
+  rex::ui::Presenter* PresenterPtr() const { return presenter(); }
+};
+rex::ui::Presenter* GetWindowPresenter(rex::ui::Window* w) {
+  return w ? reinterpret_cast<const WindowPresenterAccessor*>(w)->PresenterPtr()
+           : nullptr;
+}
+}  // namespace
+
 class Fable2App : public rex::ReXApp {
  public:
   using rex::ReXApp::ReXApp;
@@ -322,6 +340,13 @@ class Fable2App : public rex::ReXApp {
           "[fable2-config] remote control server could not start; remote "
           "input disabled (see logs/)");
     }
+
+    // The `screenshot` command reads the game's rendered frame from the
+    // renderer's presenter (CaptureGuestOutput). Query it at command time, not
+    // at startup: this hook runs before SetupPresentation, so the window and
+    // its presenter may not exist yet when the server starts.
+    remote_server_.SetPresenterProvider(
+        [this]() -> rex::ui::Presenter* { return GetWindowPresenter(window()); });
 
     // Observe remote A-presses (the state machine's input transition). The
     // press is brief, so latch its timestamp here (on the server thread) and

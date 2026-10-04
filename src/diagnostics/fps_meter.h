@@ -99,6 +99,12 @@ inline bool enabled() {
 
 }  // namespace fable2::fpsmeter
 
+// Per-frame hook for the main-menu mod item (fable2_modmenu.h, included
+// after this header). Kept as a forward declaration here so the mod menu can
+// keep its label cache fresh every frame without redefining the render-loop
+// override (which this header owns). Defined in fable2::modmenu::on_frame.
+namespace fable2 { namespace modmenu { void on_frame(uint8_t* base); } }
+
 extern "C" void MainRenderLoop_82B9CD68(PPCContext& ctx, uint8_t* base) {
   // Bounded unfiltered trace window (FABLE2_TRACE_WINDOW=1); see above.
   fable2::functrace_window::run_window(
@@ -138,5 +144,7 @@ extern "C" void MainRenderLoop_82B9CD68(PPCContext& ctx, uint8_t* base) {
   }
   // F5 (host) -> run the external Lua file (per-frame, responsive).
   fable2::f5lua::poll_mainloop(ctx, base);
+  // Main-menu mod item: keep the relabeled row's string cache fresh.
+  fable2::modmenu::on_frame(base);
   __imp__MainRenderLoop_82B9CD68(ctx, base);
 }

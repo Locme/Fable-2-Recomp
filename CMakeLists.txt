@@ -241,6 +241,11 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   )
 endif()
 
+# (The screenshot command reads the game's rendered frame directly from the
+# renderer's GPU guest output via Presenter::CaptureGuestOutput - see
+# src/diagnostics/fable2_frame_capture.h - so no external capture helper is
+# needed.)
+
 # --- Recomp user config (fable2_config.toml) -------------------------------
 # Header-only toml++ parser, vendored from the same version the ReXGlue SDK
 # uses (thirdparty/rexglue-sdk-src/thirdparty/tomlplusplus), so the app's
