@@ -283,16 +283,32 @@ static const uint8_t kNeedleDownloadable[] = {  // "Downloadable Content" UTF-16
 // strings land in the low part of the front-end heap (0x405xxxxx-0x40Axxxxx
 // observed across runs), so scan that 16MB region first (fast) and only fall
 // back to the rest of the 64MB window if it is absent.
-inline void find_downloadable(const uint8_t* base, StrRefs& out) {
-  // Search BOTH the low 16MB and the rest of the front-end heap and collect
-  // every live copy. The RENDERED label is the persistent copy (observed in
-  // the high heap, e.g. 0x428xxxxx); a transient low-heap copy also appears
-  // (e.g. when the DLC feature allocates). We must mutate the persistent one,
-  // so sweep both regions instead of stopping at the first hit.
+inline void find_downloadable(const uint8_t* base, int shown, StrRefs& out) {
+  // Always search the STOCK label ("Downloadable Content"). The main menu's
+  // rotating background scenes re-allocate the rendered copy as the stock
+  // label, so that is what the rendered copy actually says between scene
+  // changes. Searching the stock label is what keeps the rendered copy in the
+  // cache; searching the current label (MOD MENU/LOADED) misses the
+  // re-allocated copy, so the write lands on a non-rendered copy and the
+  // relabel never appears on screen. A 0-result re-scan keeps the prior cache
+  // (see scanner_thread), so a relabeled copy is not lost between scene
+  // changes either.
+  (void)shown;
+  // Sweep a wide front-end heap window, collecting every live copy. The heap
+  // layout varies per run: the rendered copy has landed anywhere from the low
+  // 0x405xxxxx cluster up past the 128MB mark (a run found it at no address
+  // in 0x40000000-0x50000000 at all), so we sweep 0x40000000-0x60000000
+  // (256MB) to cover the observed range. The sweep runs on the background
+  // scanner thread (region-based read_g skips uncommitted pages), so the wider
+  // window stays off the render thread.
   out.count = 0;
-  find_needle(base, 0x40000000u, 0x41000000u, kNeedleDownloadable,
+  find_needle(base, 0x40000000u, 0x44000000u, kNeedleDownloadable,
               sizeof(kNeedleDownloadable), out.addrs, 8, &out.count);
-  find_needle(base, 0x41000000u, 0x44000000u, kNeedleDownloadable,
+  find_needle(base, 0x44000000u, 0x50000000u, kNeedleDownloadable,
+              sizeof(kNeedleDownloadable), out.addrs, 8, &out.count);
+  find_needle(base, 0x50000000u, 0x54000000u, kNeedleDownloadable,
+              sizeof(kNeedleDownloadable), out.addrs, 8, &out.count);
+  find_needle(base, 0x54000000u, 0x60000000u, kNeedleDownloadable,
               sizeof(kNeedleDownloadable), out.addrs, 8, &out.count);
 }
 
@@ -647,20 +663,28 @@ inline void scanner_thread() {
           log_line("scanner: diag readable chunks %d/%d in 0x40000000-0x41000000", rd, tot);
         }
         StrRefs refs;
-        find_downloadable(base, refs);
+        find_downloadable(base, s.shown.load(std::memory_order_relaxed), refs);  // stock label
         std::lock_guard<std::mutex> lk(s.dl_mu);
-        bool changed = (refs.count != s.dl_n);
-        if (!changed)
-          for (int i = 0; i < refs.count; ++i)
-            if (s.dl[i] != refs.addrs[i]) { changed = true; break; }
-        for (int i = 0; i < refs.count && i < 8; ++i) s.dl[i] = refs.addrs[i];
-        s.dl_n = (refs.count < 8) ? refs.count : 8;
-        if (changed) {
-          log_line("scanner: cached %d 'Downloadable Content' string(s):", s.dl_n);
-          for (int i = 0; i < s.dl_n; ++i) {
-            const uint8_t* p =
-                reinterpret_cast<const uint8_t*>(host_addr(base, s.dl[i]));
-            log_line(" 0x%08X writable=%d", s.dl[i], page_ok_write(p) ? 1 : 0);
+        // Keep the existing cached addresses when a re-scan finds nothing:
+        // once the row is relabeled (MOD MENU / LOADED) the original
+        // "Downloadable Content" needle no longer matches, so a 0-result scan
+        // must NOT clear the live addresses (otherwise on_frame stops
+        // re-writing and the LOADED state never renders). Only replace the
+        // cache when the scan actually finds the label.
+        if (refs.count > 0) {
+          bool changed = (refs.count != s.dl_n);
+          if (!changed)
+            for (int i = 0; i < refs.count; ++i)
+              if (s.dl[i] != refs.addrs[i]) { changed = true; break; }
+          for (int i = 0; i < refs.count && i < 8; ++i) s.dl[i] = refs.addrs[i];
+          s.dl_n = (refs.count < 8) ? refs.count : 8;
+          if (changed) {
+            log_line("scanner: cached %d 'Downloadable Content' string(s):", s.dl_n);
+            for (int i = 0; i < s.dl_n; ++i) {
+              const uint8_t* p =
+                  reinterpret_cast<const uint8_t*>(host_addr(base, s.dl[i]));
+              log_line(" 0x%08X writable=%d", s.dl[i], page_ok_write(p) ? 1 : 0);
+            }
           }
         }
       }
