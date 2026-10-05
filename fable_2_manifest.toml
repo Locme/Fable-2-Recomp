@@ -237,6 +237,9 @@ name = "Story_TatterSpireGetMoving"
 [entrypoint.functions."0x831465C8"]
 name = "LoadPubGames_831465C8"
 
+# Shooting a gun when on a pressure plate in wellspring cave (issue #38)
+[entrypoint.functions."0x82988EA8"]
+
 # === Guild chest (fable2.com website items / CE content unlock) ===
 # The Guild chest holds items obtainable from the fable2.com website and the
 # Collectors Edition content. An unregistered player who clicks it sees
