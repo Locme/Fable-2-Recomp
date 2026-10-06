@@ -191,7 +191,10 @@ add_custom_command(TARGET fable_2 POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
           ${CMAKE_CURRENT_SOURCE_DIR}/tools/fable2-functrace.cmd
           $<TARGET_FILE_DIR:fable_2>/fable2-functrace.cmd
-  COMMENT "Staging README.md + fable2-functrace.cmd next to fable_2.exe"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          ${CMAKE_CURRENT_SOURCE_DIR}/tools/run_profiler.cmd
+          $<TARGET_FILE_DIR:fable_2>/run_profiler.cmd
+  COMMENT "Staging README.md + fable2-functrace.cmd + run_profiler.cmd next to fable_2.exe"
 )
 
 # --- F5 external-Lua runner (src/lua/) -----------------------------------
