@@ -104,6 +104,14 @@ unlock_ce = true
 # Default: false
 skip_intro_videos = false
 
+# Disable Motion Blur (mid-asm hook fable2_hook_disable_motion_blur): the
+# camera's full-screen motion blur amount (what scripts set via Camera.SetBlur)
+# is zeroed on its way to the renderer each frame. The camera's own value is
+# untouched. The log shows "[motion-blur] game requested ..." the first time
+# the game asks for blur. false = blur as in the original game.
+# Default: false
+disable_motion_blur = false
+
 # Force a CPU readback of the render-to-texture resolve that regenerates the
 # hero/dog face+skin texture, so the character does not render black on a
 # split-memory host (see plans/hero-dog-texture-readback.md). Approach + the
@@ -223,6 +231,9 @@ bool Load(const std::filesystem::path& path) {
     values.skip_intro_videos =
         Read<bool>(patches_table, "patches", "skip_intro_videos", "boolean",
                    values.skip_intro_videos);
+    values.disable_motion_blur =
+        Read<bool>(patches_table, "patches", "disable_motion_blur", "boolean",
+                   values.disable_motion_blur);
     values.hero_dog_texture_readback =
         Read<bool>(patches_table, "patches", "hero_dog_texture_readback", "boolean",
                    values.hero_dog_texture_readback);

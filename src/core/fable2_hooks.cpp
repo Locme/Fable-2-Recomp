@@ -97,6 +97,26 @@ void fable2_hook_ce_grantavail(PPCRegister& r3) {
   }
 }
 
+// Disable Motion Blur. Runs right after `lfs f12, 0xd4(r31)` at 0x822A49E8 in
+// the camera update, where the camera's current full-screen motion blur amount
+// (+0xD4) is loaded to be copied into the renderer's view settings (+0x7C).
+// Forcing f12 to 0 means the renderer never applies the blur, while the camera
+// object and any script reading Camera.GetBlur still see the game's value.
+// The first non-zero request is logged once, so the log shows whether the game
+// actually asked for motion blur during play.
+void fable2_hook_disable_motion_blur(PPCRegister& f12) {
+  static bool logged = false;
+  const bool disable = fable2::config::Get().disable_motion_blur;
+  if (!logged && f12.f64 != 0.0) {
+    logged = true;
+    REXSYS_INFO("[motion-blur] game requested full-screen motion blur {:.3f} ({})", f12.f64,
+                disable ? "forced to 0" : "left on");
+  }
+  if (disable) {
+    f12.f64 = 0.0;
+  }
+}
+
 // Skip Intro Videos (just-harry's "Skip intro videos" patch, as a hook).
 // sub_822F4958 builds the boot video queue (microsoft_logo.bik,
 // lionhead_logo.bik, terminator) and loops queueing slots until
