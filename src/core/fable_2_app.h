@@ -372,13 +372,9 @@ class Fable2App : public rex::ReXApp {
 #endif  // FABLE2_REMOTE_CONTROL
   // Apply the game patches (see src/core/fable2_patches.h) once the SDK has
   // decrypted default.xex into the guest arena, before the module launches.
-  // The patch table is data-driven: fable2_patches.toml next to the exe
-  // (created with built-in defaults on first launch; a broken file falls
-  // back to the built-ins, so a hand edit can never wedge the launch).
+  // Each patch is switched on by a [patches] key in fable2_config.toml
+  // (loaded earlier, in OnPostInitLogging).
   void OnPostLoadXexImage() override {
-    const std::filesystem::path exe_dir =
-        rex::filesystem::GetExecutableFolder();
-    fable2::patches::Load(exe_dir / "fable2_patches.toml");
     fable2::patches::ApplyAll(runtime()->memory(), PPCImageConfig);
   }
 

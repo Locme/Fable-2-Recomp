@@ -110,3 +110,37 @@ void fable2_hook_skip_intro_videos(PPCRegister& r3) {
     r3.u64 = 0;
   }
 }
+
+// High Tick Rate (Xenia patch by Guy), code half. Runs BEFORE the store at
+// 0x8233AEB4 that writes the game's LF tick-rate double (0x83319510);
+// returning true jumps past it, which is exactly the Xenia patch's NOP.
+// Without this the game overwrote the patched value (15 Hz -> 30 Hz, written
+// at load by src/core/fable2_patches.cpp) and the patch had no effect.
+// Toggle: [patches] high_tick_rate.
+bool fable2_hook_high_tick_rate_skip_store() {
+  static const bool enabled = [] {
+    const bool on = fable2::config::Get().high_tick_rate;
+    if (on) {
+      REXSYS_INFO("[tick-rate] LF tick forced to 30 Hz (high_tick_rate)");
+    }
+    return on;
+  }();
+  return enabled;
+}
+
+// Higher HF Tick Rate (Xenia patch by Ultra), code half. Runs BEFORE the store
+// at 0x8233AE98 that writes the HF tick double (0x83319518, normally 30 Hz =
+// twice the 15 Hz LF tick). Skipping it keeps the patched 60 Hz, so with
+// high_tick_rate on the HF:LF ratio stays 2:1 (60:30) instead of collapsing
+// to 1:1 (30:30), which made cloth physics misbehave.
+// Toggle: [patches] higher_hf_tick_rate.
+bool fable2_hook_high_hf_tick_rate_skip_store() {
+  static const bool enabled = [] {
+    const bool on = fable2::config::Get().higher_hf_tick_rate;
+    if (on) {
+      REXSYS_INFO("[tick-rate] HF tick forced to 60 Hz (higher_hf_tick_rate)");
+    }
+    return on;
+  }();
+  return enabled;
+}
