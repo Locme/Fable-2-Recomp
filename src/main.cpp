@@ -69,4 +69,17 @@ REXCVAR_DEFINE_STRING(
     "released (free cursor) and re-engaged when it closes. Empty = always lock "
     "while focused. This key is excluded from the gamepad map.");
 
+#ifdef _WIN32
+// Hybrid-graphics laptops (Intel/AMD iGPU + NVIDIA/AMD dGPU): ask the drivers
+// to run us on the discrete GPU. Without this Windows may hand the game the
+// integrated GPU, which hits D3D12 DEVICE_HUNG (TDR) shortly after boot
+// (issue #42). These must be exported from the .exe itself; a user's own
+// per-app setting in Windows Graphics settings / NVIDIA Control Panel still
+// takes priority.
+extern "C" {
+__declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
+__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+}
+#endif
+
 REX_DEFINE_APP(fable_2, Fable2App::Create)
