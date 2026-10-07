@@ -15,29 +15,28 @@
 // The manifest stores paths relative to the data/ root with backslashes and in
 // the game's canonical (mostly lowercase) casing; the emulated FS matches
 // case-insensitively (the shipped content ships e.g. as Shaders\Shaders.sbk
-// while the manifest lists shaders\shaders.sbk), so we:
-//   - compare existing entries case-insensitively,
-//   - append missing entries in lowercase (the canonical casing),
-//   - never rewrite or drop existing lines.
+// while the manifest lists shaders\shaders.sbk), so entries are compared
+// case-insensitively and with / and \ treated alike, and missing entries are
+// appended in lowercase (the canonical casing).
 //
-// Idempotent: a second run appends nothing. Only ever APPENDS missing entries,
-// so hand-added lines (e.g. by tools/stage_content.cmd's merge or
-// ensure_recomp_manifest) survive.
+// Idempotent: a second run changes nothing. Existing lines are never
+// reordered or rewritten, so hand-added entries (e.g. from
+// tools/stage_content.cmd's merge or ensure_recomp_manifest) survive. The one
+// thing removed is a duplicate of an earlier line (same path; see below).
 //
 // Duplicates: an earlier version compared forward-slash paths against the
 // manifest's backslash entries, so every nested file counted as "missing" and
-// was appended again on EVERY launch (hundreds of lines per start). The game
-// reads the whole manifest at boot, so a manifest that had grown that way
-// slows startup. Existing duplicate lines (same path, compared
-// case-insensitively and ignoring / vs \) are removed once, keeping the first
-// occurrence and the original order; the previous file is kept as
-// dir.manifest.dupes.bak.
+// was appended again on EVERY launch (hundreds of lines per start). Such
+// duplicate lines are removed once, keeping the first occurrence and the
+// original order; the previous file is kept as dir.manifest.dupes.bak next to
+// default.xex.
 #pragma once
 
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -71,8 +70,7 @@ inline int EnsureComplete(const std::filesystem::path& game_data_root) {
     return 0;
   }
 
-  // 1. Existing entries, in file order, with duplicates marked.
-  std::vector<std::string> lines;  // original text, CR stripped
+  // 1. Existing entries, in file order; count and skip duplicates.
   std::unordered_set<std::string> existing;
   size_t duplicates = 0;
   std::vector<std::string> unique_lines;
