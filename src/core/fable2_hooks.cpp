@@ -110,3 +110,23 @@ void fable2_hook_skip_intro_videos(PPCRegister& r3) {
     r3.u64 = 0;
   }
 }
+
+// Realtime Texture Morphing (hero/dog black textures without CPU readback;
+// plans/hero-dog-realtime-texture-morphing.md). sub_82A76018 turns each
+// texture morph request into a morph job and copies the request's
+// RealTimeTextureMorphing byte with `lbz r9, 0x20(r30)` at 0x82A7607C. With
+// it set, the morph renderer (sub_82A69728) draws straight into the final
+// uncompressed texture and builds its mips on the GPU, instead of resolving to
+// a scratch texture that the CPU reads back and DXT-compresses (that CPU read
+// is what returns black on a split-memory host).
+void fable2_hook_realtime_texture_morphing(PPCRegister& r9) {
+  if (!fable2::config::Get().realtime_texture_morphing) {
+    return;
+  }
+  static bool logged = false;
+  if (!logged) {
+    logged = true;
+    REXSYS_INFO("[texture-morph] building hero/dog textures in realtime (GPU) mode");
+  }
+  r9.u64 = 1;
+}
