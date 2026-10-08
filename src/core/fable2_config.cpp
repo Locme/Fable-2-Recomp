@@ -117,15 +117,34 @@ high_tick_rate = false
 # high_tick_rate is on. false = original 30 Hz.
 # Default: false
 higher_hf_tick_rate = false
+# Disable Motion Blur (mid-asm hook fable2_hook_disable_motion_blur): the
+# camera's full-screen motion blur amount (what scripts set via Camera.SetBlur)
+# is zeroed on its way to the renderer each frame. The camera's own value is
+# untouched. The log shows "[motion-blur] game requested ..." the first time
+# the game asks for blur. false = blur as in the original game.
+# Default: false
+disable_motion_blur = false
+
+# Realtime Texture Morphing (mid-asm hook fable2_hook_realtime_texture_morphing):
+# the hero's and dog's morphed skin textures are rendered straight into their
+# final texture on the GPU (the game's own RealTimeTextureMorphing mode)
+# instead of being read back to the CPU and DXT-compressed. This fixes the
+# black hero/dog without hero_dog_texture_readback. The textures are stored
+# uncompressed, so they use a few MB more memory. See
+# plans/hero-dog-realtime-texture-morphing.md. false = original baked mode.
+# Default: true
+realtime_texture_morphing = true
 
 # Force a CPU readback of the render-to-texture resolve that regenerates the
 # hero/dog face+skin texture, so the character does not render black on a
 # split-memory host (see plans/hero-dog-texture-readback.md). Approach + the
 # guest base 0x12704000 come from just-harry's Unofficial Xenia femtofork for
 # Fable II. Seeds the SDK cvar readback_resolve_force_addresses; readback then
-# happens only for that resolve, not every frame. false = original black bug.
-# Default: true
-hero_dog_texture_readback = true
+# happens only for that resolve, not every frame. Superseded by
+# realtime_texture_morphing; only needed (and only effective) with that off.
+# false = original black bug.
+# Default: false
+hero_dog_texture_readback = false
 
 [perf]
 # NtYieldExecution batching for the hot-function overrides (see
@@ -243,6 +262,12 @@ bool Load(const std::filesystem::path& path) {
     values.higher_hf_tick_rate =
         Read<bool>(patches_table, "patches", "higher_hf_tick_rate", "boolean",
                    values.higher_hf_tick_rate);
+    values.disable_motion_blur =
+        Read<bool>(patches_table, "patches", "disable_motion_blur", "boolean",
+                   values.disable_motion_blur);
+    values.realtime_texture_morphing =
+        Read<bool>(patches_table, "patches", "realtime_texture_morphing", "boolean",
+                   values.realtime_texture_morphing);
     values.hero_dog_texture_readback =
         Read<bool>(patches_table, "patches", "hero_dog_texture_readback", "boolean",
                    values.hero_dog_texture_readback);
