@@ -77,7 +77,7 @@ inline bool in_main_menu() {
          s == fable2::stateprobe::kMainMenuMovie;
 }
 
-inline bool enabled() {
+inline bool enabled_uncached() {
 #ifdef _WIN32
   char v[8] = {};
   size_t n = 0;
@@ -87,8 +87,12 @@ inline bool enabled() {
   return v != nullptr && v[0] == '1';
 #endif
 }
+inline bool enabled() {
+  static const bool v = enabled_uncached();
+  return v;
+}
 
-inline bool logging() {
+inline bool logging_uncached() {
 #ifdef _WIN32
   char v[8] = {};
   size_t n = 0;
@@ -97,6 +101,10 @@ inline bool logging() {
   const char* v = std::getenv("FABLE2_MODMENU_LOG");
   return v != nullptr && v[0] == '1';
 #endif
+}
+inline bool logging() {
+  static const bool v = logging_uncached();
+  return v;
 }
 
 inline FILE*& logf() {
@@ -337,7 +345,7 @@ static const uint8_t kNwContent[] = {  // second word of "Downloadable Content"
     0x00, 0x43, 0x00, 0x6F, 0x00, 0x6E, 0x00, 0x74, 0x00, 0x65,
     0x00, 0x6E, 0x00, 0x74};
 
-inline bool scanlog_enabled() {
+inline bool scanlog_enabled_uncached() {
   char v[8] = {};
 #ifdef _WIN32
   size_t n = 0;
@@ -346,6 +354,10 @@ inline bool scanlog_enabled() {
   const char* e = std::getenv("FABLE2_MODMENU_SCANLOG");
   return e && e[0] == '1';
 #endif
+}
+inline bool scanlog_enabled() {
+  static const bool v = scanlog_enabled_uncached();
+  return v;
 }
 
 inline std::string read_u16be(const uint8_t* base, uint32_t a, int maxc);

@@ -39,7 +39,7 @@ namespace fable2::functrace_window {
 //                                 open (default: everything)
 //
 // Writes the usual fable2_func_trace.log (append) + summary files.
-inline bool enabled() {
+inline bool enabled_uncached() {
 #ifdef _WIN32
   char v[8] = {};
   size_t n = 0;
@@ -48,6 +48,10 @@ inline bool enabled() {
   const char* v = std::getenv("FABLE2_TRACE_WINDOW");
   return v != nullptr && v[0] == '1';
 #endif
+}
+inline bool enabled() {
+  static const bool v = enabled_uncached();
+  return v;
 }
 
 inline double delay_seconds() {

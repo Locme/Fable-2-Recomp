@@ -94,7 +94,7 @@ inline uint32_t rd32(const uint8_t* base, uint32_t a) {
 }
 
 // ---- env / logging --------------------------------------------------------
-inline bool enabled() {
+inline bool enabled_uncached() {
 #ifdef _WIN32
   char v[8] = {};
   size_t n = 0;
@@ -104,8 +104,12 @@ inline bool enabled() {
   return v != nullptr && v[0] == '1';
 #endif
 }
+inline bool enabled() {
+  static const bool v = enabled_uncached();
+  return v;
+}
 
-inline bool logging() {
+inline bool logging_uncached() {
 #ifdef _WIN32
   char v[8] = {};
   size_t n = 0;
@@ -116,8 +120,12 @@ inline bool logging() {
   return v != nullptr && v[0] == '1';
 #endif
 }
+inline bool logging() {
+  static const bool v = logging_uncached();
+  return v;
+}
 
-inline bool try_known() {
+inline bool try_known_uncached() {
 #ifdef _WIN32
   char v[8] = {};
   size_t n = 0;
@@ -127,6 +135,10 @@ inline bool try_known() {
   const char* v = std::getenv("FABLE2_DEADBEEF_EVERY");
   return v != nullptr && v[0] == '1';
 #endif
+}
+inline bool try_known() {
+  static const bool v = try_known_uncached();
+  return v;
 }
 
 inline FILE*& logf() {

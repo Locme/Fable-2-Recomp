@@ -41,7 +41,7 @@ void sample_text_item(const uint8_t* base, PPCContext& ctx);
 
 namespace fable2::textprobe {
 
-inline bool enabled() {
+inline bool enabled_uncached() {
 #ifdef _WIN32
   char v[8] = {};
   size_t n = 0;
@@ -50,6 +50,10 @@ inline bool enabled() {
   const char* v = std::getenv("FABLE2_TEXT_PROBE");
   return v != nullptr && v[0] == '1';
 #endif
+}
+inline bool enabled() {
+  static const bool v = enabled_uncached();
+  return v;
 }
 
 inline double delay_seconds() {
