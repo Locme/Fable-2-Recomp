@@ -139,6 +139,25 @@ name = "fable2_hook_skip_intro_videos"
 registers = ["r3"]
 after_instruction = true
 
+# Hero/dog black textures, fixed without CPU readback
+# (plans/hero-dog-realtime-texture-morphing.md). The hero's and dog's skin
+# textures are built by texture morphing. In the default "baked" mode the morph
+# renderer (sub_82A69728) draws each mip into a scratch render target, resolves
+# it to guest memory (the 0x12704000 scratch texture), locks that READONLY on
+# the CPU and DXT-compresses it into the final texture (sub_83008E98). On a
+# split-memory host that CPU read sees stale memory, so the result is black.
+# The game also has a RealTimeTextureMorphing mode in which the morph is drawn
+# straight into an uncompressed final texture and its mips are made on the
+# GPU, so the CPU never reads the result. Every morph request becomes a morph
+# job in sub_82A76018, which copies the request's realtime byte with
+# `lbz r9, 0x20(r30)` at 0x82A7607C (then `stb r9, 0x60(r31)`); force it to 1.
+# Toggle: [patches] realtime_texture_morphing.
+[[entrypoint.midasm_hook]]
+address = 0x82A7607C
+name = "fable2_hook_realtime_texture_morphing"
+registers = ["r9"]
+after_instruction = true
+
 # Conservative settings: no register optimizations
 skip_lr = true
 skip_msr = true
