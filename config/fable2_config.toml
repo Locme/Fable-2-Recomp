@@ -112,3 +112,19 @@ hero_dog_texture_readback = false
 # every call); 0 = never yield; larger = fewer context switches.
 # Default: 1
 hotfunc_yield_every = 1
+
+[loading]
+# EXPERIMENTAL - OFF BY DEFAULT. While a load is running, the game's clock is
+# briefly run faster (x16 while the game only waits on its own timers, x8 while
+# no frames are being presented) so the game's timed waits end sooner. In
+# testing this saved about 4-6 s of a 22 s "Continue" load (22.5 s -> 16-18 s).
+# It is a timing trick, not a real fix: game time jumps forward a few seconds
+# in total during a load, so anything driven by game time (animations, music,
+# scripts, timers) can briefly run fast or misbehave. It has had only light
+# play-testing. If anything looks, sounds or plays wrong around a load, set
+# this back to false.
+# Needs an SDK build that has the faster_loading cvar (the SDK pinned by this
+# repo does). Fine tuning (idle_boost, stall_boost, ...) is SDK cvars in
+# fable_2.toml; measurements and details: docs/FASTER_LOADING.md.
+# Default: false
+faster_loading = false

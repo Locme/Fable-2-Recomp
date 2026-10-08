@@ -112,6 +112,7 @@ skip_intro_videos = false
 # Default: false
 disable_motion_blur = false
 
+
 # Realtime Texture Morphing (mid-asm hook fable2_hook_realtime_texture_morphing):
 # the hero's and dog's morphed skin textures are rendered straight into their
 # final texture on the GPU (the game's own RealTimeTextureMorphing mode)
@@ -142,6 +143,22 @@ hero_dog_texture_readback = false
 # every call); 0 = never yield; larger = fewer context switches.
 # Default: 1
 hotfunc_yield_every = 1
+
+[loading]
+# EXPERIMENTAL - OFF BY DEFAULT. While a load is running, the game's clock is
+# briefly run faster (x16 while the game only waits on its own timers, x8 while
+# no frames are being presented) so the game's timed waits end sooner. In
+# testing this saved about 4-6 s of a 22 s "Continue" load (22.5 s -> 16-18 s).
+# It is a timing trick, not a real fix: game time jumps forward a few seconds
+# in total during a load, so anything driven by game time (animations, music,
+# scripts, timers) can briefly run fast or misbehave. It has had only light
+# play-testing. If anything looks, sounds or plays wrong around a load, set
+# this back to false.
+# Needs an SDK build that has the faster_loading cvar (the SDK pinned by this
+# repo does). Fine tuning (idle_boost, stall_boost, ...) is SDK cvars in
+# fable_2.toml; measurements and details: docs/FASTER_LOADING.md.
+# Default: false
+faster_loading = false
 )TOML_EOF";
 
 std::string_view TypeName(toml::node_type t) {
@@ -199,8 +216,8 @@ bool Load(const std::filesystem::path& path) {
 
   // Warn about unknown top-level sections (usually a typo or a file written
   // for a newer build).
-  static constexpr std::array<std::string_view, 4> kKnownSections = {
-      "general", "input", "patches", "perf"};
+  static constexpr std::array<std::string_view, 5> kKnownSections = {
+      "general", "input", "patches", "perf", "loading"};
   for (const auto& [key, value] : root) {
     const bool known =
         std::ranges::find(kKnownSections, key.str()) != kKnownSections.end();
@@ -260,6 +277,14 @@ bool Load(const std::filesystem::path& path) {
     values.hotfunc_yield_every = static_cast<int32_t>(Read<int64_t>(
         perf_table, "perf", "hotfunc_yield_every", "integer",
         values.hotfunc_yield_every));
+  }
+
+  const toml::path loading_path{"loading"};
+  const auto loading = root[loading_path];
+  if (loading.is_table()) {
+    const toml::table& loading_table = *loading.as_table();
+    values.faster_loading = Read<bool>(loading_table, "loading", "faster_loading",
+                                       "boolean", values.faster_loading);
   }
 
   g_values = values;

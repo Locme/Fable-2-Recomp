@@ -326,6 +326,14 @@ class Fable2App : public rex::ReXApp {
     seed_cvar("keyboard_gamepad_map", cfg.keyboard_gamepad_map);
     seed_cvar("mouse_look", cfg.mouse_look ? "true" : "false");
     seed_cvar("mouse_look_scale", std::to_string(cfg.mouse_look_scale));
+    if (cfg.faster_loading) {
+      REXSYS_WARN(
+          "[fable2-config] faster_loading is ON (EXPERIMENTAL): game time is "
+          "briefly sped up during loads. Set [loading] faster_loading = false "
+          "in fable2_config.toml if anything looks or plays wrong. See "
+          "docs/FASTER_LOADING.md.");
+      seed_cvar("faster_loading", "true");
+    }
     // NOTE: the hero/dog readback fix (readback_resolve_force_addresses) is a
     // GPU-PLUGIN cvar, so it is seeded in OnPostSetup() (after the plugin is
     // loaded) rather than here - see plans/hero-dog-texture-readback.md.

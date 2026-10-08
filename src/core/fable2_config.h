@@ -86,6 +86,11 @@ struct Values {
   // original (yield every call), 0 = never yield. Larger = fewer context
   // switches, less frequent CPU rotation to other guest threads.
   int32_t hotfunc_yield_every = 1;
+  // [loading] faster_loading: EXPERIMENTAL, off by default. Seeds the SDK cvar
+  // faster_loading, which briefly runs the guest clock faster during a load so
+  // the game's timed waits end sooner (docs/FASTER_LOADING.md). Only seeded
+  // when true; the SDK default is off.
+  bool faster_loading = false;
 };
 
 // Load the config from `path`.
