@@ -100,6 +100,21 @@ address = 0x8256D9E4
 name = "fable2_hook_website_grantnew"
 registers = ["r3"]
 after_instruction = true
+
+# Disable Motion Blur. In the camera's per-frame update (sub_822A47C0, the
+# code that eases the camera's current values toward their targets), the
+# current full-screen motion blur amount (camera +0xD4; the value scripts set
+# through Camera.SetBlur / SetBlurCut / SetFullScreenMotionBlurCut) is handed
+# to the renderer: `lfs f12, 0xd4(r31)` at 0x822A49E8, then
+# `stfs f12, 0x7c(r11)`. Right after the load we zero f12 so the renderer
+# always receives 0; the camera's own value (and script reads of it) is
+# untouched. f12 is not read again before it is overwritten.
+# Toggle: [patches] disable_motion_blur.
+[[entrypoint.midasm_hook]]
+address = 0x822A49E8
+name = "fable2_hook_disable_motion_blur"
+registers = ["f12"]
+after_instruction = true
 #
 # CE: sub_824ACAE0 is the CE-chest grant vtable slot called from
 # GetCEContent. Its entire body is `lbz r3, 993(r3)` (returns the byte at

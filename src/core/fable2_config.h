@@ -60,6 +60,10 @@ struct Values {
   // intro videos"; hook fable2_hook_skip_intro_videos in
   // src/core/fable2_hooks.cpp). false = original.
   bool skip_intro_videos = false;
+  // [patches] disable_motion_blur: zero the full-screen motion blur amount the
+  // camera passes to the renderer (hook fable2_hook_disable_motion_blur in
+  // src/core/fable2_hooks.cpp). false = original.
+  bool disable_motion_blur = false;
   // [patches] realtime_texture_morphing: build the hero/dog morphed skin
   // textures on the GPU (the game's own RealTimeTextureMorphing mode) instead
   // of CPU-compressing a resolved scratch texture, so they are not black on a
