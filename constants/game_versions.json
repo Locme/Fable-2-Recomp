@@ -128,6 +128,38 @@
       "requiredFiles": ["data/gold_version.txt", "data/startup.vfsconfig"],
       "rejectFiles": ["data/tu1_data.bnk"],
       "rejectDirectories": []
+    },
+    {
+      "id": "goty-asia",
+      "xexSize": 21217280,
+      "mediaId": "0962B000",
+      "executableVersion": "0.0.0.18",
+      "payloadOffset": 16384,
+      "hash": "7a680559a20178b15745c20180a31fa905bbdab3da9f8a146646bb90267364eb",
+      "name": "GOTY Asia",
+      "compatible": false,
+      "reason": "asia requires its own validated recompilation profile and is not supported yet.",
+      "language": 1,
+      "codeGroup": "unverified",
+      "requiredFiles": [],
+      "rejectFiles": [],
+      "rejectDirectories": []
+    },
+    {
+      "id": "goty-latin-america",
+      "xexSize": 21217280,
+      "mediaId": "772E8EE81",
+      "executableVersion": "0.0.0.12",
+      "payloadOffset": 16384,
+      "hash": "7472468f71f31663898dd006b4750c8f07f7947ed0ed1d95d316bd3762cbfb00",
+      "name": "GOTY Latin America",
+      "compatible": false,
+      "reason": "latin-america requires its own validated recompilation profile and is not supported yet.",
+      "language": 1,
+      "codeGroup": "unverified",
+      "requiredFiles": [],
+      "rejectFiles": [],
+      "rejectDirectories": []
     }
   ]
 }

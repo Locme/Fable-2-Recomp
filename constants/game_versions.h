@@ -36,7 +36,13 @@ inline constexpr std::array<std::string_view, 0> krejectDirectories6 = {};
 inline constexpr std::array<std::string_view, 2> krequiredFiles7 = {"data/gold_version.txt", "data/startup.vfsconfig"};
 inline constexpr std::array<std::string_view, 1> krejectFiles7 = {"data/tu1_data.bnk"};
 inline constexpr std::array<std::string_view, 0> krejectDirectories7 = {};
-inline constexpr std::array<GameVersion, 8> kVersions = {{
+inline constexpr std::array<std::string_view, 0> krequiredFiles8 = {};
+inline constexpr std::array<std::string_view, 0> krejectFiles8 = {};
+inline constexpr std::array<std::string_view, 0> krejectDirectories8 = {};
+inline constexpr std::array<std::string_view, 0> krequiredFiles9 = {};
+inline constexpr std::array<std::string_view, 0> krejectFiles9 = {};
+inline constexpr std::array<std::string_view, 0> krejectDirectories9 = {};
+inline constexpr std::array<GameVersion, 10> kVersions = {{
   {"goty-us-eu", "88c4ef2e18e65409444d1b068eff921d1f7e180a5ae64edc64ba6b0872372662", "GOTY USA/Europe", true, "Original GOTY USA/Europe executable and content detected.", 1, "goty-identical-payload-2026-09-28", krequiredFiles0, krejectFiles0, krejectDirectories0},
   {"goty-german", "3f36e7870a06e04b3702760e93c61b1c7fded321b94021da6bfa120b424e6eb4", "German GOTY", true, "Original German GOTY executable and localization detected.", 3, "goty-identical-payload-2026-09-28", krequiredFiles1, krejectFiles1, krejectDirectories1},
   {"german-retail-tu1", "cec9238ef5d7b391345a8897ef00a4673ae4f106f89385c81723ba5f9d0807b5", "German retail/TU1", false, "German retail/TU1 needs its own validated recompilation profile and is not supported yet.", 3, "unverified", krequiredFiles2, krejectFiles2, krejectDirectories2},
@@ -45,6 +51,8 @@ inline constexpr std::array<GameVersion, 8> kVersions = {{
   {"japan", "3ca11c7b9b62e4935b42118f6d3d52bc33a7d72b3ced852e46c2236dd627972d", "Japan", false, "Original Japanese needs its own validated recompilation profile and is not supported yet.", 1, "unverified", krequiredFiles5, krejectFiles5, krejectDirectories5},
   {"goty-russia", "aaf100ce83994d178c6585ab502babfd6b3c9d0739017e96e6e5d61bcbbca943", "GOTY Russia", true, "Original Russian GOTY executable and content detected.", 1, "goty-identical-payload-2026-09-28", krequiredFiles6, krejectFiles6, krejectDirectories6},
   {"goty-spain", "6422e22327b576f6d188206ab00112eedc780f3d130a45ca6ac42f7e4b99da6c", "GOTY Spain", true, "Original Spanish GOTY executable and content detected.", 1, "goty-identical-payload-2026-09-28", krequiredFiles7, krejectFiles7, krejectDirectories7},
+  {"goty-asia", "7a680559a20178b15745c20180a31fa905bbdab3da9f8a146646bb90267364eb", "GOTY Asia", false, "asia requires its own validated recompilation profile and is not supported yet.", 1, "unverified", krequiredFiles8, krejectFiles8, krejectDirectories8},
+  {"goty-latin-america", "7472468f71f31663898dd006b4750c8f07f7947ed0ed1d95d316bd3762cbfb00", "GOTY Latin America", false, "latin-america requires its own validated recompilation profile and is not supported yet.", 1, "unverified", krequiredFiles9, krejectFiles9, krejectDirectories9},
 }};
 inline constexpr const GameVersion* Find(std::string_view hash) {
   for (const auto& version : kVersions) if (version.hash == hash) return &version;

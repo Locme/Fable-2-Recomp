@@ -17,5 +17,7 @@ public static class GameVersions
         new("japan", "3ca11c7b9b62e4935b42118f6d3d52bc33a7d72b3ced852e46c2236dd627972d", "Japan", false, "Original Japanese needs its own validated recompilation profile and is not supported yet.", 1, "unverified", [], [], []),
         new("goty-russia", "aaf100ce83994d178c6585ab502babfd6b3c9d0739017e96e6e5d61bcbbca943", "GOTY Russia", true, "Original Russian GOTY executable and content detected.", 1, "goty-identical-payload-2026-09-28", ["data/gold_version.txt", "data/startup.vfsconfig"], ["data/tu1_data.bnk"], []),
         new("goty-spain", "6422e22327b576f6d188206ab00112eedc780f3d130a45ca6ac42f7e4b99da6c", "GOTY Spain", true, "Original Spanish GOTY executable and content detected.", 1, "goty-identical-payload-2026-09-28", ["data/gold_version.txt", "data/startup.vfsconfig"], ["data/tu1_data.bnk"], []),
+        new("goty-asia", "7a680559a20178b15745c20180a31fa905bbdab3da9f8a146646bb90267364eb", "GOTY Asia", false, "asia requires its own validated recompilation profile and is not supported yet.", 1, "unverified", [], [], []),
+        new("goty-latin-america", "7472468f71f31663898dd006b4750c8f07f7947ed0ed1d95d316bd3762cbfb00", "GOTY Latin America", false, "latin-america requires its own validated recompilation profile and is not supported yet.", 1, "unverified", [], [], []),
     ];
 }
