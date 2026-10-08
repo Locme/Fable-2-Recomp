@@ -27,6 +27,7 @@ PATCHES = (
 # SDK fork commit first. Skipped when already applied, e.g. once baked in.
 FOLLOWUP_PATCHES = (
     "rexglue-sdk-async-pipeline-wait.patch",
+    "rexglue-sdk-shader-depth-bias.patch",
 )
 
 
