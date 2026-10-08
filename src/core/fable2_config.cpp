@@ -104,6 +104,14 @@ unlock_ce = true
 # Default: false
 skip_intro_videos = false
 
+# Disable Motion Blur (mid-asm hook fable2_hook_disable_motion_blur): the
+# camera's full-screen motion blur amount (what scripts set via Camera.SetBlur)
+# is zeroed on its way to the renderer each frame. The camera's own value is
+# untouched. The log shows "[motion-blur] game requested ..." the first time
+# the game asks for blur. false = blur as in the original game.
+# Default: false
+disable_motion_blur = false
+
 # Realtime Texture Morphing (mid-asm hook fable2_hook_realtime_texture_morphing):
 # the hero's and dog's morphed skin textures are rendered straight into their
 # final texture on the GPU (the game's own RealTimeTextureMorphing mode)
@@ -235,6 +243,9 @@ bool Load(const std::filesystem::path& path) {
     values.skip_intro_videos =
         Read<bool>(patches_table, "patches", "skip_intro_videos", "boolean",
                    values.skip_intro_videos);
+    values.disable_motion_blur =
+        Read<bool>(patches_table, "patches", "disable_motion_blur", "boolean",
+                   values.disable_motion_blur);
     values.realtime_texture_morphing =
         Read<bool>(patches_table, "patches", "realtime_texture_morphing", "boolean",
                    values.realtime_texture_morphing);
