@@ -1,4 +1,2 @@
 # Unified-diff context lines representing blank source lines contain one space.
 thirdparty/rexglue-sdk-runtime-fixes.patch text eol=lf whitespace=-blank-at-eol
-thirdparty/rexglue-sdk-async-pipeline-wait.patch text eol=lf whitespace=-blank-at-eol
-thirdparty/rexglue-sdk-shader-depth-bias.patch text eol=lf whitespace=-blank-at-eol
