@@ -83,7 +83,8 @@ high_tick_rate = false
 # fable2_hook_high_hf_tick_rate_skip_store): doubles the HF tick from 30 Hz to
 # 60 Hz. The game expects HF to run at twice LF; with high_tick_rate alone
 # both run at 30 Hz and cloth physics misbehaves. Turn this on whenever
-# high_tick_rate is on. false = original 30 Hz.
+# high_tick_rate is on. Requires high_tick_rate: ignored when that is false.
+# false = original 30 Hz.
 # Default: false
 higher_hf_tick_rate = false
 

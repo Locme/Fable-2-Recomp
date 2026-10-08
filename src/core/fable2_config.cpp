@@ -114,9 +114,11 @@ high_tick_rate = false
 # fable2_hook_high_hf_tick_rate_skip_store): doubles the HF tick from 30 Hz to
 # 60 Hz. The game expects HF to run at twice LF; with high_tick_rate alone
 # both run at 30 Hz and cloth physics misbehaves. Turn this on whenever
-# high_tick_rate is on. false = original 30 Hz.
+# high_tick_rate is on. Requires high_tick_rate: ignored when that is false.
+# false = original 30 Hz.
 # Default: false
 higher_hf_tick_rate = false
+
 # Disable Motion Blur (mid-asm hook fable2_hook_disable_motion_blur): the
 # camera's full-screen motion blur amount (what scripts set via Camera.SetBlur)
 # is zeroed on its way to the renderer each frame. The camera's own value is

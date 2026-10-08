@@ -153,16 +153,24 @@ bool fable2_hook_high_tick_rate_skip_store() {
 // twice the 15 Hz LF tick). Skipping it keeps the patched 60 Hz, so with
 // high_tick_rate on the HF:LF ratio stays 2:1 (60:30) instead of collapsing
 // to 1:1 (30:30), which made cloth physics misbehave.
-// Toggle: [patches] higher_hf_tick_rate.
+// Requires high_tick_rate: on its own (HF 60 Hz with LF 15 Hz, 4:1) it would
+// break the 2:1 ratio the other way, so it is ignored unless both are on.
+// Toggle: [patches] higher_hf_tick_rate (needs [patches] high_tick_rate).
 bool fable2_hook_high_hf_tick_rate_skip_store() {
   static const bool enabled = [] {
-    const bool on = fable2::config::Get().higher_hf_tick_rate;
-    if (on) {
+    const auto& cfg = fable2::config::Get();
+    if (cfg.higher_hf_tick_rate && !cfg.high_tick_rate) {
+      REXSYS_WARN("[tick-rate] higher_hf_tick_rate ignored: it requires high_tick_rate");
+      return false;
+    }
+    if (cfg.higher_hf_tick_rate) {
       REXSYS_INFO("[tick-rate] HF tick forced to 60 Hz (higher_hf_tick_rate)");
     }
-    return on;
+    return cfg.higher_hf_tick_rate;
   }();
   return enabled;
+}
+
 // Realtime Texture Morphing (hero/dog black textures without CPU readback;
 // plans/hero-dog-realtime-texture-morphing.md). sub_82A76018 turns each
 // texture morph request into a morph job and copies the request's

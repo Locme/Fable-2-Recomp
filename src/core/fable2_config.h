@@ -66,7 +66,7 @@ struct Values {
   bool high_tick_rate = false;
   // [patches] higher_hf_tick_rate: HF tick 30 -> 60 Hz (Xenia "Higher HF Tick
   // Rate" by Ultra; data write in src/core/fable2_patches.cpp + hook
-  // fable2_hook_high_hf_tick_rate_skip_store). Use with high_tick_rate.
+  // fable2_hook_high_hf_tick_rate_skip_store). Requires high_tick_rate.
   bool higher_hf_tick_rate = false;
   // [patches] disable_motion_blur: zero the full-screen motion blur amount the
   // camera passes to the renderer (hook fable2_hook_disable_motion_blur in

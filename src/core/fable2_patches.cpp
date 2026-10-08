@@ -47,7 +47,8 @@ std::vector<Patch> BuildPatches() {
           "Doubles the HF tick to 60 Hz, keeping the 2:1 HF:LF ratio with "
           "High Tick Rate.",
           "Ultra",
-          cfg.higher_hf_tick_rate,
+          // Requires High Tick Rate (same gate as the hook in fable2_hooks.cpp).
+          cfg.high_tick_rate && cfg.higher_hf_tick_rate,
           {
               // HF tick double at 0x83319518: 30.0 -> 60.0.
               {Op::Width::kBe8, 0x83319519, 0x4E},
