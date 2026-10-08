@@ -54,20 +54,26 @@
 
 namespace fable2::functrace {
 
-inline std::atomic<bool>& enabled() {
-  static std::atomic<bool> e{[] {
+namespace detail {
+inline bool env_flag_on(const char* var) {
 #ifdef _WIN32
-    char v[8] = {};
-    size_t n = 0;
-    return ::getenv_s(&n, v, sizeof(v), "FABLE2_FUNC_TRACE") == 0 &&
-           v[0] == '1';
+  char v[8] = {};
+  size_t n = 0;
+  return ::getenv_s(&n, v, sizeof(v), var) == 0 && v[0] == '1';
 #else
-    const char* v = std::getenv("FABLE2_FUNC_TRACE");
-    return v != nullptr && v[0] == '1';
+  const char* v = std::getenv(var);
+  return v != nullptr && v[0] == '1';
 #endif
-  }()};
-  return e;
 }
+}  // namespace detail
+
+// Namespace-scope (not a function-local static) so the per-call check in
+// REX_FUNC_PROLOGUE() is a single relaxed load with no thread-safe-static
+// guard, inlined at every recompiled function entry. Profiling showed the old
+// out-of-line check costing 15-20% of the render thread with tracing off.
+inline std::atomic<bool> g_enabled{detail::env_flag_on("FABLE2_FUNC_TRACE")};
+
+inline std::atomic<bool>& enabled() { return g_enabled; }
 
 inline std::string& filter() {
   static std::string f = [] {
@@ -475,17 +481,24 @@ inline void Fable2FuncTraceFlush() {
 #if defined(REX_CONFIG_H_INCLUDED) && !defined(FABLE2_FUNC_TRACE_HOOKED)
 #define FABLE2_FUNC_TRACE_HOOKED
 #undef REX_FUNC_PROLOGUE
+// The trace call is only made when tracing is on: the common (off) path is
+// one relaxed load and a not-taken branch per guest function entry.
+#define FABLE2_FUNC_TRACE_CALL()                                              \
+  (__builtin_expect(                                                         \
+       fable2::functrace::g_enabled.load(std::memory_order_relaxed), 0)       \
+       ? Fable2FuncTraceCall(__func__)                                        \
+       : (void)0)
 #if defined(__clang__)
 #define REX_FUNC_PROLOGUE()                                            \
   __builtin_assume(((size_t)base & 0x1F) == 0),                        \
-      Fable2FuncTraceCall(__func__)
+      FABLE2_FUNC_TRACE_CALL()
 #elif defined(__GNUC__)
 #define REX_FUNC_PROLOGUE()                                            \
   do {                                                                 \
     if (((size_t)base & 0x1F) != 0) __builtin_unreachable();           \
-    Fable2FuncTraceCall(__func__);                                     \
+    FABLE2_FUNC_TRACE_CALL();                                          \
   } while (0)
 #else
-#define REX_FUNC_PROLOGUE() Fable2FuncTraceCall(__func__)
+#define REX_FUNC_PROLOGUE() FABLE2_FUNC_TRACE_CALL()
 #endif
 #endif
