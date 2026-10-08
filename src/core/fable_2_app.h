@@ -172,9 +172,9 @@ class Fable2App : public rex::ReXApp {
           rex::cvar::SetFlagByName("depth_bias_shader_units", "16")) {
         REXSYS_INFO("[fable2-config] seeded dog fur depth bias (dog_fur_depth_bias=true)");
       } else {
-        REXSYS_WARN("[fable2-config] dog fur depth bias cvars missing (SDK patch not applied?)");
+        REXSYS_WARN("[fable2-config] dog fur depth bias cvars missing "
+                    "(SDK without depth_bias_shader?)");
       }
-    }
     }
 
     // Feed the F3 debug overlay with guest FPS (below). The GPU plugin

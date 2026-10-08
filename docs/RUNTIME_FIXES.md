@@ -102,9 +102,10 @@ Async compilation stays on; only the first use of a pipeline can stall.
 `async_pipeline_wait = false` in the SDK config restores the old skipping, and
 `async_pipeline_wait_timeout_ms` (default 5000) bounds a single wait.
 
-`thirdparty/rexglue-sdk-shader-depth-bias.patch` adds the SDK cvars
-`depth_bias_shader` (a guest pixel shader hash) and `depth_bias_shader_units`:
-an extra host depth bias for draws that use that shader. Fable II draws the
+The dog's fur flickers because of depth ties. The fix is made in rexglue-sdk
+itself (himdo/rexglue-sdk, not a patch here): the SDK cvars
+`depth_bias_shader` (a guest pixel shader hash) and `depth_bias_shader_units`
+add an extra host depth bias for draws that use that shader. Fable II draws the
 dog's fur as 15 thin shell layers over the body with pixel shader
 `014F8A02DB7B19CA`, a greater-or-equal depth test and no polygon offset. The
 layers sit about 0.001 units apart and rely on exact ties in the Xbox 360's
@@ -118,7 +119,7 @@ the near-ties back into passes; in testing it removed the dog's flickering at
 `depth_bias_shader` in the SDK config takes precedence. The SDK's
 general exact-24-bit mode (`depth_float24_convert_in_pixel_shader`) also
 addresses this but breaks other rendering in this game. The bias applies to
-the host render-target path only, not ROV. Applied after the async patch.
+the host render-target path only, not ROV.
 
 ## Validation and remaining limits
 
