@@ -22,6 +22,12 @@ PATCHES = (
     "rexglue-sdk-runtime-fixes.patch",
     "rexglue-sdk-debug-exports.patch",
 )
+# Follow-up fixes applied on top of any accepted revision (the base pin with
+# PATCHES, or a fork commit that bakes PATCHES in), so a fix doesn't need a new
+# SDK fork commit first. Skipped when already applied, e.g. once baked in.
+FOLLOWUP_PATCHES = (
+    "rexglue-sdk-async-pipeline-wait.patch",
+)
 
 
 def fail(message):
@@ -106,6 +112,22 @@ def main():
                  f"can be applied, or use a fork revision that bakes them in.\n"
                  f"Restore the base with: git -C {source} checkout {SDK_PIN}")
         print(f"SDK revision {head} already carries all runtime fixes (baked in).")
+
+    for name in FOLLOWUP_PATCHES:
+        patch = patch_directory / name
+        if not patch.is_file():
+            fail(f"patch file is missing: {patch}")
+        state = patch_state(source, patch)
+        if state == "applied":
+            print(f"Already applied: {name}")
+        elif state == "clean":
+            git(source, "apply", str(patch))
+            print(f"Applied: {name}")
+        else:
+            detail = git(source, "apply", "--check", str(patch), check=False).stderr.strip()
+            fail(f"SDK patch {name} conflicts with local edits:\n{detail}\n"
+                 "The SDK work tree has other changes in the same places. Restore it with:\n"
+                 f"  git -C {source} checkout -- . && git -C {source} clean -fd")
 
     if not args.skip_dependencies:
         # libmspack is either a submodule gitlink (base pin and older fork
