@@ -30,6 +30,13 @@
 // duplicate lines are removed once, keeping the first occurrence and the
 // original order; the previous file is kept as dir.manifest.dupes.bak next to
 // default.xex.
+//
+// Line endings: the manifest is guest data, so its line ending is a property
+// of the file, not of the host OS. Lines are written with whatever ending the
+// existing manifest already uses (detected from its first line), so the file
+// stays consistent on Windows, Linux and macOS alike. Only a manifest with no
+// line ending to copy (empty or a single unterminated line) falls back to
+// CRLF, the format of the shipped dir.manifest.
 #pragma once
 
 #include <algorithm>
@@ -53,6 +60,15 @@ inline std::string Key(std::string s) {
   }
   return s;
 }
+
+// Line ending used by the existing manifest contents: CRLF or LF, taken from
+// the first line break. Falls back to the shipped manifest's CRLF when the
+// file has no line break yet.
+inline const char* DetectEol(const std::string& contents) {
+  const size_t nl = contents.find('\n');
+  if (nl == std::string::npos) return "\r\n";
+  return nl > 0 && contents[nl - 1] == '\r' ? "\r\n" : "\n";
+}
 }  // namespace detail
 
 // Ensures every file under <game_data_root>/data/ has an entry in
@@ -75,12 +91,14 @@ inline int EnsureComplete(const std::filesystem::path& game_data_root) {
   size_t duplicates = 0;
   std::vector<std::string> unique_lines;
   bool ends_with_newline = true;
+  std::string eol = "\r\n";
   {
     std::ifstream in(manifest, std::ios::binary);
     std::string line;
     if (in) {
       std::string all((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
       ends_with_newline = all.empty() || all.back() == '\n';
+      eol = detail::DetectEol(all);
       size_t pos = 0;
       while (pos < all.size()) {
         size_t nl = all.find('\n', pos);
@@ -107,7 +125,7 @@ inline int EnsureComplete(const std::filesystem::path& game_data_root) {
     }
     if (!ec) {
       std::ofstream out(manifest, std::ios::binary | std::ios::trunc);
-      for (const auto& l : unique_lines) out << l << "\r\n";
+      for (const auto& l : unique_lines) out << l << eol;
       out.flush();
       if (out) {
         ends_with_newline = true;
@@ -137,7 +155,7 @@ inline int EnsureComplete(const std::filesystem::path& game_data_root) {
 
   std::sort(missing.begin(), missing.end());
 
-  // 3. Append (CRLF), starting a fresh line if the file did not end with one.
+  // 3. Append (in the manifest's own line ending), starting a fresh line if the file did not end with one.
   std::ofstream out(manifest, std::ios::binary | std::ios::app);
   if (!out) {
     REXSYS_ERROR("[manifest] cannot open {} for append; guest VFS index will "
@@ -145,9 +163,9 @@ inline int EnsureComplete(const std::filesystem::path& game_data_root) {
                  manifest.string(), missing.size());
     return 0;
   }
-  if (!ends_with_newline) out << "\r\n";
+  if (!ends_with_newline) out << eol;
   for (const auto& m : missing) {
-    out << m << "\r\n";  // lowercase relative path with backslashes
+    out << m << eol;  // lowercase relative path with backslashes
   }
   out.flush();
   REXSYS_INFO("[manifest] appended {} missing entr{} to {}", missing.size(),
