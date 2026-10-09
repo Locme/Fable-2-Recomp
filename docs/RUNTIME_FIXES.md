@@ -22,7 +22,7 @@ and the .NET 8 SDK on PATH. From the repository root:
 
 ```cmd
 build.cmd -release fable_2
-build.cmd launcher-self-contained
+build.cmd launcher
 tests\run_native_tests.cmd
 dotnet run --project tests/Fable2.Launcher.ConfigTests -c Release
 ```

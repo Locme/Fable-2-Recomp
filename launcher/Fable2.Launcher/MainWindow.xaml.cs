@@ -4,6 +4,8 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace Fable2Launcher;
 
@@ -49,7 +51,11 @@ public partial class MainWindow : Window
             SetGameDirectory(configuredPath);
             return;
         }
-        StatusText.Text = "Choose your original gamefiles folder (default.xex and data).";
+        // No saved (or no longer valid) game folder: default the selected location
+        // to the folder the launcher is running from, so it is never empty on first
+        // launch. The status line then explains what is still missing (e.g. that
+        // default.xex has not been extracted yet).
+        SetGameDirectory(launcherDirectory);
     }
 
     private void SetGameDirectory(string directory)
@@ -178,6 +184,7 @@ public partial class MainWindow : Window
 
     private void LaunchGame()
     {
+        if (_extracting) return;
         if (_gameDirectory is null || _executableDirectory is null) return;
 
         try
@@ -288,6 +295,217 @@ public partial class MainWindow : Window
             }
             SetGameDirectory(dialog.FolderName);
         }
+    }
+
+    private bool _extracting;
+    private volatile bool _stopRequested;
+    private readonly Dictionary<string, CheckBox> _rootChecks = new(StringComparer.OrdinalIgnoreCase);
+    private long _lastUiPush;
+    private double _lastPushedPercent = -1;
+    private static readonly SolidColorBrush DoneBrush = new(Color.FromRgb(0x7F, 0xE0, 0xA6));
+    private static readonly SolidColorBrush ItemBrush = new(Color.FromRgb(0xD0, 0xD8, 0xD2));
+
+    private void ExtractClicked(object sender, RoutedEventArgs e)
+    {
+        if (_extracting) return;
+
+        var isoDialog = new OpenFileDialog
+        {
+            Title = "Choose an ISO",
+            Filter = "ISO (*.iso)|*.iso",
+            CheckFileExists = true
+        };
+        if (isoDialog.ShowDialog(this) != true) return;
+        string isoPath = isoDialog.FileName;
+
+        // No destination prompt: extract straight into the folder the launcher is
+        // running from, so the game data lands beside fable_2.exe and becomes
+        // launchable in place.
+        string outDir = AppContext.BaseDirectory;
+
+        _extracting = true;
+        _stopRequested = false;
+        ExtractButton.IsEnabled = false;
+        LaunchButton.IsEnabled = false;
+        StopButton.IsEnabled = true;
+
+        // Show the overlay immediately (indeterminate) so there is no perceptible
+        // delay; the folder checklist and byte total fill in once the disc layout
+        // has been read on the worker thread.
+        ExtractionOverlay.Visibility = Visibility.Visible;
+        ExtractionProgressBar.IsIndeterminate = true;
+        ExtractionPercentText.Text = "…";
+        ExtractionBytesText.Text = "Scanning…";
+        ExtractionPhaseText.Text = "Scanning disc…";
+        ExtractionFileText.Text = "Scanning for the GDFX header…";
+        ExtractionFolderList.Children.Clear();
+        _rootChecks.Clear();
+
+        Task.Run(() =>
+        {
+            string? error = null;
+            int files = 0;
+            long bytes = 0;
+            bool cancelled = false;
+            try
+            {
+                using DiscExtraction disc = DiscExtraction.Open(isoPath, _ => { });
+                List<RootItem> plan = disc.Plan.ToList();
+
+                var progress = new ExtractionProgress(plan, () => _stopRequested);
+                progress.Changed += p => Dispatcher.BeginInvoke(() => PushExtractionUi(p));
+                progress.RootCompleted += name =>
+                    Dispatcher.BeginInvoke(new Action(() => MarkRootDone(name)));
+
+                // If Stop was pressed while the layout was being read, bail now.
+                if (_stopRequested)
+                    throw new ExtractionCancelledException();
+
+                // The overlay is already on screen (indeterminate); now that the
+                // layout is known, build the checklist and switch to the byte-
+                // accurate determinate bar.
+                Dispatcher.Invoke(() =>
+                {
+                    BuildFolderChecklist(plan);
+                    ResetExtractionUi(progress);
+                });
+
+                string hash = disc.ExtractXex(outDir, _ => { }, progress);
+                progress.SetPhase("Checking default.xex SHA-256…");
+                (bool ok, string message) = GameCompatibilityInspector.CheckHash(hash);
+                if (!ok)
+                {
+                    // Don't leave a 21 MB XEX behind from a disc we won't support.
+                    try { File.Delete(Path.Combine(outDir, "default.xex")); }
+                    catch { /* best effort */ }
+                    throw new InvalidDataException(message);
+                }
+
+                (files, bytes) = disc.ExtractRemaining(outDir, _ => { }, progress);
+                progress.SetPhase("Finalizing…");
+            }
+            catch (ExtractionCancelledException)
+            {
+                cancelled = true;
+            }
+            catch (Exception exception)
+            {
+                error = exception.Message;
+            }
+
+            Dispatcher.Invoke(() =>
+            {
+                _extracting = false;
+                _stopRequested = false;
+                ExtractButton.IsEnabled = true;
+                LaunchButton.IsEnabled = true;
+                if (cancelled)
+                {
+                    ExtractionOverlay.Visibility = Visibility.Collapsed;
+                    ExtractionStatusText.Visibility = Visibility.Visible;
+                    ExtractionStatusText.Text = "Extraction stopped.";
+                    return;
+                }
+                if (error is not null)
+                {
+                    ExtractionOverlay.Visibility = Visibility.Collapsed;
+                    ExtractionStatusText.Visibility = Visibility.Visible;
+                    ExtractionStatusText.Text = "Extraction failed.";
+                    MessageBox.Show(this, error, "Could not extract ISO",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+                ExtractionProgressBar.Value = 100;
+                ExtractionPercentText.Text = "100%";
+                ExtractionPhaseText.Text = "Done";
+                ExtractionStatusText.Visibility = Visibility.Visible;
+                ExtractionStatusText.Text =
+                    $"Extracted {files:N0} files ({DiscExtraction.FormatSize(bytes)}) from {Path.GetFileName(isoPath)}.";
+                // SetGameDirectory reports readiness (including whether fable_2.exe
+                // is staged) in the status line and configuration badge.
+                SetGameDirectory(outDir);
+                HideOverlayAfter(900);
+            });
+        });
+    }
+
+    private void StopClicked(object sender, RoutedEventArgs e)
+    {
+        if (!_extracting) return;
+        _stopRequested = true;
+        StopButton.IsEnabled = false;
+        ExtractionPhaseText.Text = "Stopping…";
+    }
+
+    private void BuildFolderChecklist(List<RootItem> plan)
+    {
+        ExtractionFolderList.Children.Clear();
+        _rootChecks.Clear();
+        foreach (RootItem item in plan)
+        {
+            var box = new CheckBox
+            {
+                Content = item.Name,
+                IsChecked = false,
+                IsHitTestVisible = false,   // display-only progress checkbox
+                FontSize = 14,
+                FontWeight = item.IsDirectory ? FontWeights.SemiBold : FontWeights.Normal,
+                Foreground = ItemBrush,
+                Margin = new Thickness(0, 3, 0, 3),
+                VerticalContentAlignment = VerticalAlignment.Center
+            };
+            ExtractionFolderList.Children.Add(box);
+            _rootChecks[item.Name] = box;
+        }
+    }
+
+    private void ResetExtractionUi(ExtractionProgress progress)
+    {
+        _lastPushedPercent = -1;
+        ExtractionProgressBar.IsIndeterminate = false;
+        ExtractionProgressBar.Value = 0;
+        ExtractionPercentText.Text = "0%";
+        ExtractionBytesText.Text =
+            $"{DiscExtraction.FormatSize(0)} / {DiscExtraction.FormatSize(progress.TotalBytes)}";
+        ExtractionPhaseText.Text = "Reading disc…";
+        ExtractionFileText.Text = "Reading disc…";
+    }
+
+    private void PushExtractionUi(ExtractionProgress progress)
+    {
+        long now = Environment.TickCount64;
+        double pct = progress.Percent;
+        bool force = pct >= 100.0 || now - _lastUiPush >= 80 || pct - _lastPushedPercent >= 0.25;
+        if (!force) return;
+        _lastUiPush = now;
+        _lastPushedPercent = pct;
+
+        ExtractionProgressBar.Value = pct;
+        ExtractionPercentText.Text = $"{pct:0}%";
+        ExtractionBytesText.Text =
+            $"{DiscExtraction.FormatSize(progress.CompletedBytes + progress.CurrentFileWritten)}"
+            + $" / {DiscExtraction.FormatSize(progress.TotalBytes)}";
+        ExtractionPhaseText.Text = progress.Phase;
+        ExtractionFileText.Text = progress.CurrentFile ?? "…";
+    }
+
+    private void MarkRootDone(string name)
+    {
+        if (!_rootChecks.TryGetValue(name, out CheckBox? box)) return;
+        box.IsChecked = true;
+        box.Foreground = DoneBrush;
+    }
+
+    private void HideOverlayAfter(int delayMs)
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(delayMs) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            if (!_extracting)   // a new extraction may have started in the meantime
+                ExtractionOverlay.Visibility = Visibility.Collapsed;
+        };
+        timer.Start();
     }
 
     private void SaveClicked(object sender, RoutedEventArgs e) => SaveConfiguration();

@@ -4,6 +4,11 @@ Command-line tool that extracts game content from Xbox 360 disc images (raw
 ISO/rumb). Written for the Fable 2 GOTY recompile project, but it works on any
 retail Xbox 360 disc that uses the GDFX filesystem.
 
+The disc-reading logic lives in a reusable library in [`lib/`](lib/README.md)
+(`X360ExtractCore.dll`). This CLI is a thin `Program.cs` on top of it, and the
+Fable II launcher consumes the same library — so there is a single source of
+truth for the GDFX / ISO 9660 / STFS readers.
+
 ## What it does
 
 The tool reads the disc image directly (no mounting, no virtual drive):
@@ -32,8 +37,11 @@ batch chain across sector boundaries up to the directory's declared size.
 ## Build
 
 ```
-build.cmd                    framework-dependent single-file exe (default)
-build.cmd self-contained     bundles the .NET 8 runtime (~70 MB exe)
+build.cmd                    self-contained single-file exe (default; ships
+                             with the .NET 8 runtime, ~70 MB)
+build.cmd dev                framework-dependent single-file exe (needs the
+                             .NET 8 runtime installed)
+build.cmd pack               pack the reusable library as a NuGet package
 ```
 
 The cmd cleans the staged output and intermediate build dirs, then publishes
@@ -43,9 +51,25 @@ to `out\tooling\x360extract\` at the repo root:
 out\tooling\x360extract\x360extract.exe
 ```
 
-The default (framework-dependent) build needs the .NET 8 runtime installed.
-The project already requires .NET 8 for the launcher, so this adds no new
-user dependency.
+The default self-contained build runs on a clean Windows machine with no
+.NET install — the same story as the launcher's default build. The single-file
+exe bundles the `X360ExtractCore.dll` library inside it.
+
+## Reusable library
+
+`lib/` is a standalone .NET 8 class library (`X360ExtractCore.dll`, namespace
+`X360Extract`) that does all the real work: the GDFX, ISO 9660 and STFS
+readers plus a high-level `X360Disc` facade (`Open` / `Extract` /
+`ExtractEntries` / `WriteFile` / `ListTree`). Any .NET project can use it:
+
+- **Project reference** — `<ProjectReference
+  Include="..\..\tools\x360extract\lib\X360Extract.Core.csproj" />`
+- **NuGet package** — `build.cmd pack` produces
+  `out\tooling\nuget\Fable2.X360Extract.<version>.nupkg`.
+- **Copy the DLL** — drop `X360ExtractCore.dll` next to your project and add
+  a `<Reference>`.
+
+See [`lib/README.md`](lib/README.md) for the full API and examples.
 
 ## Usage
 
