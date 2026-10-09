@@ -90,6 +90,7 @@ Optional command-line overrides (all normal `--cvar value` args):
 | `--update_data_root <path>` | Optional update content root |
 | `--window_width` / `--window_height` / `--fullscreen` | Presentation options |
 | `--keyboard_gamepad_map <map>` | Host keyboard -> guest gamepad button map (see below) |
+| `--skipHash` | Skip the `default.xex` SHA-256 integrity check. The hash is still written to the log, but a mismatch no longer blocks launch (useful for a modified or non-catalogue XEX) |
 
 ## User config (fable2_config.toml)
 
