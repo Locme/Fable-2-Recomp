@@ -30,7 +30,10 @@ are copied raw.
 
 Settings: 720p/1080p/1440p/4K output, 1x–4x internal render scale, anisotropic
 filtering (game default through 16x), none/FXAA/FXAA Extreme, VSync,
-windowed/borderless/exclusive fullscreen and 30/60/120/144/165/240/unlimited FPS. Output size
+windowed/borderless/exclusive fullscreen and 30/60/120/144/165/240/unlimited FPS.
+Below VSync, "Disable motion blur" and "Skip intro videos" set
+`disable_motion_blur` and `skip_intro_videos` in `fable2_config.toml`
+`[patches]`; saving changes only those two lines. Output size
 is separate from the original 720p guest mode. The FPS options need the
 matched source-built Release runtime described in
 [the runtime guide](../docs/RUNTIME_FIXES.md). Higher rates are not a promise
