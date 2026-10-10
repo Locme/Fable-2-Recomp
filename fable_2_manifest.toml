@@ -126,6 +126,29 @@ name = "fable2_hook_ce_grantavail"
 registers = ["r3"]
 after_instruction = true
 
+# High Tick Rate (Xenia patch by Guy), code half. The Xenia patch NOPs the
+# store at 0x8233AEB4 that writes the tick-rate double at 0x83319510 every
+# time it runs, and patches that double (be8 0x83319511: 15.0 -> 30.0; written
+# at load by src/core/fable2_patches.cpp). Guest .text never runs here, so the NOP was inert and
+# the game overwrote the patched value. This hook runs BEFORE the store and,
+# while [patches] high_tick_rate is true, jumps past it (= the NOP).
+[[entrypoint.midasm_hook]]
+address = 0x8233AEB4
+name = "fable2_hook_high_tick_rate_skip_store"
+registers = []
+jump_address_on_true = 0x8233AEB8
+
+# Higher HF Tick Rate (Xenia patch by Ultra), code half. Same function: the
+# store at 0x8233AE98 (`stfd f0, -0x6ae8(r9)`) writes the HF tick double at
+# 0x83319518 (30.0, copied from 0x833194F0) every time it runs and would undo
+# the 30 -> 60 Hz data write (src/core/fable2_patches.cpp). Runs BEFORE the
+# store and, while [patches] higher_hf_tick_rate is true, jumps past it.
+[[entrypoint.midasm_hook]]
+address = 0x8233AE98
+name = "fable2_hook_high_hf_tick_rate_skip_store"
+registers = []
+jump_address_on_true = 0x8233AE9C
+
 # Skip Intro Videos (just-harry's "Skip intro videos" patch from his
 # Unofficial Xenia femtofork, as a hook). sub_822F4958 builds the boot video
 # queue: slot 0 = microsoft_logo.bik, slot 1 = lionhead_logo.bik, slot 2 =

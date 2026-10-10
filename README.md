@@ -116,9 +116,10 @@ game recreates it with defaults on launch if it is ever missing. Loaded in
 - The `[patches]` section holds runtime toggles for the recomp-level
   (mid-asm hook) patches, consulted by the hook bodies on every call
   (`src/core/fable2_hooks.cpp`) — flip one and relaunch to A/B a patch with no
-  rebuild. Currently: `fps_60` (60 FPS hook; `true` = main loop ~60/s,
-  `false` = original 30/s). Guest-image data patches are a different file:
-  `fable2_patches.toml` (see above).
+  rebuild. This includes `high_tick_rate` and `higher_hf_tick_rate` (Xenia
+  "High Tick Rate" / "Higher HF Tick Rate"; turn both on together), which
+  also drive the guest-image data writes below. There is no separate patch
+  file.
 
 
 
@@ -220,19 +221,16 @@ string-build + `RunScript` call in `src/core/fable2_f5_lua.h`.\
 
 # Notes for dev who want to work on the build:
 
-## Guest-image patches (fable2_patches.toml)
+## Guest-image patches
 
 Data patches for the loaded `default.xex` guest image (Xenia game-patches
-format), applied before the guest module launches: `Fable2App::OnPostLoadXexImage()`
-→ `fable2::patches::Load()` + `ApplyAll()` (code in `src/core/fable2_patches.{h,cpp}`).
-Same lifecycle as the user config: staged by the build, recreated with the
-built-in defaults if missing, and a broken file falls back to the built-ins
-(dialog + log) so it never blocks launch. Each `[[patch]]` has an `enabled`
-toggle (default true) — flip it in the file and relaunch to A/B a patch with
-no rebuild. **Scope: data patches only** — code-region ops are inert in this
-recomp (guest `.text` is never executed); code patches are mid-asm hooks
-instead. Full details, the current patch list, and how code patches work:
-`docs/patches.md`.
+ops), applied before the guest module launches: `Fable2App::OnPostLoadXexImage()`
+→ `fable2::patches::ApplyAll()` (code in `src/core/fable2_patches.{h,cpp}`).
+There is no patch file: each patch is switched on by a `[patches]` key in
+`fable2_config.toml` (currently `high_tick_rate` and `higher_hf_tick_rate`).
+**Scope: data patches only** — code-region ops are inert in this recomp
+(guest `.text` is never executed); code patches are mid-asm hooks instead.
+Full details: `docs/patches.md`.
 
 ## Guest function-call tracing (fable2_func_trace.log)
 
