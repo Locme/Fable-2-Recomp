@@ -25,6 +25,8 @@ public partial class MainWindow : Window
     private readonly List<(string key, CheckBox check)> _patchChecks = new();
     private Border? _activeKeyField;
     private static readonly SolidColorBrush MutedBrush = new(Color.FromRgb(0x8A, 0x99, 0x92));
+    // Red accent for unstable/experimental patches.
+    private static readonly SolidColorBrush UnstableBrush = new(Color.FromRgb(0xE0, 0x66, 0x66));
 
     // Keybind capture field: the press-to-set host key box.
     private sealed class KeyCaptureField
@@ -902,14 +904,21 @@ public partial class MainWindow : Window
     }
 
     // Build one "checkbox + label + description" row in the PatchList.
-    private void AddPatchRow(string name, string key, string description, bool value)
+    private void AddPatchRow(string name, string key, string description, bool value,
+        bool unstable = false, Action? onChecked = null, Action? onUnchecked = null)
     {
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var labelStack = new StackPanel();
-        labelStack.Children.Add(new TextBlock { Text = name, FontWeight = FontWeights.SemiBold });
+        var nameBlock = new TextBlock
+        {
+            Text = unstable ? name + "  (unstable)" : name,
+            FontWeight = FontWeights.SemiBold,
+        };
+        if (unstable) nameBlock.Foreground = UnstableBrush;
+        labelStack.Children.Add(nameBlock);
         labelStack.Children.Add(new TextBlock
         {
             Text = description,
@@ -925,6 +934,8 @@ public partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(10, 0, 0, 0),
         };
+        if (onChecked != null) check.Checked += (s, e) => onChecked();
+        if (onUnchecked != null) check.Unchecked += (s, e) => onUnchecked();
 
         Grid.SetColumn(labelStack, 0);
         Grid.SetColumn(check, 1);
@@ -933,7 +944,10 @@ public partial class MainWindow : Window
 
         var border = new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(0x22, 0x2F, 0x49, 0x41)),
+            // Reddish tint for unstable patches, subtle green for the rest.
+            Background = unstable
+                ? new SolidColorBrush(Color.FromArgb(0x26, 0x4A, 0x2C, 0x2C))
+                : new SolidColorBrush(Color.FromArgb(0x22, 0x2F, 0x49, 0x41)),
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(14, 10, 14, 10),
             Margin = new Thickness(0, 0, 0, 10),
@@ -941,6 +955,14 @@ public partial class MainWindow : Window
         };
         PatchList.Children.Add(border);
         _patchChecks.Add((key, check));
+    }
+
+    // Set a patch checkbox by key (used to satisfy the higher_hf_tick_rate ->
+    // high_tick_rate requirement).
+    private void SetPatchChecked(string key, bool isChecked)
+    {
+        foreach (var (k, check) in _patchChecks)
+            if (k == key) { check.IsChecked = isChecked; return; }
     }
 
     private void BuildPatchRows()
@@ -953,6 +975,14 @@ public partial class MainWindow : Window
             "Force-grant the Collectors Edition chest content at save load.", _advanced.UnlockCe);
         AddPatchRow("Skip Intro Videos", "skip_intro_videos",
             "Skip the Microsoft and Lionhead logo videos at boot.", _advanced.SkipIntroVideos);
+        AddPatchRow("High Tick Rate", "high_tick_rate",
+            "Double the LF tick from 15 to 30 Hz (Xenia \"High Tick Rate\").",
+            _advanced.HighTickRate, unstable: true,
+            onUnchecked: () => SetPatchChecked("higher_hf_tick_rate", false));
+        AddPatchRow("Higher HF Tick Rate", "higher_hf_tick_rate",
+            "Double the HF tick from 30 to 60 Hz (Xenia \"Higher HF Tick Rate\"). Requires High Tick Rate.",
+            _advanced.HigherHfTickRate, unstable: true,
+            onChecked: () => SetPatchChecked("high_tick_rate", true));
         AddPatchRow("Disable Motion Blur", "disable_motion_blur",
             "Zero the camera's full-screen motion blur amount each frame.", _advanced.DisableMotionBlur);
         AddPatchRow("Realtime Texture Morphing", "realtime_texture_morphing",
@@ -961,8 +991,6 @@ public partial class MainWindow : Window
         AddPatchRow("Hero/Dog Texture Readback", "hero_dog_texture_readback",
             "CPU readback of the hero/dog texture resolve. Superseded by realtime morphing.",
             _advanced.HeroDogTextureReadback);
-        AddPatchRow("Dog Fur Depth Bias", "dog_fur_depth_bias",
-            "Small depth bias so the dog's fur does not Z-fight or flicker.", _advanced.DogFurDepthBias);
     }
 
     private void CollectPatches()
@@ -975,10 +1003,11 @@ public partial class MainWindow : Window
                 case "unlock_website": _advanced.UnlockWebsite = value; break;
                 case "unlock_ce": _advanced.UnlockCe = value; break;
                 case "skip_intro_videos": _advanced.SkipIntroVideos = value; break;
+                case "high_tick_rate": _advanced.HighTickRate = value; break;
+                case "higher_hf_tick_rate": _advanced.HigherHfTickRate = value; break;
                 case "disable_motion_blur": _advanced.DisableMotionBlur = value; break;
                 case "realtime_texture_morphing": _advanced.RealtimeTextureMorphing = value; break;
                 case "hero_dog_texture_readback": _advanced.HeroDogTextureReadback = value; break;
-                case "dog_fur_depth_bias": _advanced.DogFurDepthBias = value; break;
             }
         }
     }
