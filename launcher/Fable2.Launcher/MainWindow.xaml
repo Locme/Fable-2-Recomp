@@ -162,6 +162,38 @@
                             Checked="SettingChanged" Unchecked="SettingChanged" />
                 </Grid>
               </Border>
+
+              <Border Background="#222F4941" CornerRadius="8" Padding="14,10" Margin="0,10,0,0">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="Disable motion blur" FontWeight="SemiBold" />
+                    <TextBlock Text="Removes the camera's full-screen motion blur."
+                               FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,2,0,0" />
+                  </StackPanel>
+                  <CheckBox x:Name="DisableMotionBlurCheck" Grid.Column="1" IsChecked="False"
+                            Checked="SettingChanged" Unchecked="SettingChanged" />
+                </Grid>
+              </Border>
+
+              <Border Background="#222F4941" CornerRadius="8" Padding="14,10" Margin="0,10,0,0">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="Skip intro videos" FontWeight="SemiBold" />
+                    <TextBlock Text="Skips the Microsoft and Lionhead logo videos at startup."
+                               FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,2,0,0" />
+                  </StackPanel>
+                  <CheckBox x:Name="SkipIntroVideosCheck" Grid.Column="1" IsChecked="False"
+                            Checked="SettingChanged" Unchecked="SettingChanged" />
+                </Grid>
+              </Border>
             </StackPanel>
           </Border>
 

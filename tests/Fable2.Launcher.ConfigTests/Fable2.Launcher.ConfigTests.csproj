@@ -12,11 +12,13 @@
   <ItemGroup>
     <Compile Include="..\..\launcher\Fable2.Launcher\GraphicsSettings.cs" Link="GraphicsSettings.cs" />
     <Compile Include="..\..\launcher\Fable2.Launcher\LauncherConfigFile.cs" Link="LauncherConfigFile.cs" />
+    <Compile Include="..\..\launcher\Fable2.Launcher\PatchSettings.cs" Link="PatchSettings.cs" />
     <Compile Include="..\..\launcher\Fable2.Launcher\GameCompatibility.cs" Link="GameCompatibility.cs" />
     <Compile Include="..\..\launcher\Fable2.Launcher\GameLaunchPlan.cs" Link="GameLaunchPlan.cs" />
     <Compile Include="..\..\launcher\Fable2.Launcher\DiscExtraction.cs" Link="DiscExtraction.cs" />
     <Compile Include="..\..\launcher\Fable2.Launcher\Constants\GraphicsOptions.cs" Link="GraphicsOptions.cs" />
     <Compile Include="..\..\constants\GameVersions.cs" Link="GameVersions.cs" />
     <None Include="..\..\launcher\Fable2.Launcher\App.xaml" Link="TestData\App.xaml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\config\fable2_config.toml" Link="TestData\fable2_config.toml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
