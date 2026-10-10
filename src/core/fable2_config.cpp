@@ -82,8 +82,7 @@ mouse_look_scale = 256
 
 [patches]
 # Toggles for the recomp-level (mid-asm hook) patches, consulted at runtime
-# by the hook bodies (src/core/fable2_hooks.cpp) - no rebuild needed. Guest-image
-# DATA patches are a different file: fable2_patches.toml next to the exe.
+# by the hook bodies (src/core/fable2_hooks.cpp) - no rebuild needed.
 # Unlock Website Items (mid-asm hooks fable2_hook_website_g1/g1b/grantnew;
 # Xenia "Unlock Website Items" by Guy): forces the website-registration gates
 # AND the grant-method result in the Guild-chest item getter so the website
@@ -103,6 +102,22 @@ unlock_ce = true
 # Microsoft and Lionhead logo videos at boot. false = videos play (original).
 # Default: false
 skip_intro_videos = false
+
+# High Tick Rate (Xenia patch by Guy, plus mid-asm hook
+# fable2_hook_high_tick_rate_skip_store): doubles the game's LF tick from
+# 15 Hz to 30 Hz. Vastly improves in-game UI framerate and input delay.
+# Use together with higher_hf_tick_rate. false = original 15 Hz.
+# Default: false
+high_tick_rate = false
+
+# Higher HF Tick Rate (Xenia patch by Ultra, plus mid-asm hook
+# fable2_hook_high_hf_tick_rate_skip_store): doubles the HF tick from 30 Hz to
+# 60 Hz. The game expects HF to run at twice LF; with high_tick_rate alone
+# both run at 30 Hz and cloth physics misbehaves. Turn this on whenever
+# high_tick_rate is on. Requires high_tick_rate: ignored when that is false.
+# false = original 30 Hz.
+# Default: false
+higher_hf_tick_rate = false
 
 # Disable Motion Blur (mid-asm hook fable2_hook_disable_motion_blur): the
 # camera's full-screen motion blur amount (what scripts set via Camera.SetBlur)
@@ -243,6 +258,12 @@ bool Load(const std::filesystem::path& path) {
     values.skip_intro_videos =
         Read<bool>(patches_table, "patches", "skip_intro_videos", "boolean",
                    values.skip_intro_videos);
+    values.high_tick_rate =
+        Read<bool>(patches_table, "patches", "high_tick_rate", "boolean",
+                   values.high_tick_rate);
+    values.higher_hf_tick_rate =
+        Read<bool>(patches_table, "patches", "higher_hf_tick_rate", "boolean",
+                   values.higher_hf_tick_rate);
     values.disable_motion_blur =
         Read<bool>(patches_table, "patches", "disable_motion_blur", "boolean",
                    values.disable_motion_blur);
