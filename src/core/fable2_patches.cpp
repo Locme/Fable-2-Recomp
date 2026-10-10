@@ -10,6 +10,7 @@
 
 #include "fable2_patches.h"
 
+#include <atomic>
 #include <format>
 
 #include <rex/logging.h>
@@ -36,7 +37,8 @@ std::vector<Patch> BuildPatches() {
           "Doubles the LF tick to 30 Hz. Vastly improves in-game UI framerate. "
           "Improves input delay.",
           "Guy",
-          cfg.high_tick_rate,
+          // dynamic_tick_rate owns the rate (src/core/fable2_tick_rate.h).
+          cfg.high_tick_rate && !cfg.dynamic_tick_rate,
           {
               // LF tick double at 0x83319510: 15.0 -> 30.0.
               {Op::Width::kBe8, 0x83319511, 0x3E},
@@ -48,7 +50,8 @@ std::vector<Patch> BuildPatches() {
           "High Tick Rate.",
           "Ultra",
           // Requires High Tick Rate (same gate as the hook in fable2_hooks.cpp).
-          cfg.high_tick_rate && cfg.higher_hf_tick_rate,
+          cfg.high_tick_rate && cfg.higher_hf_tick_rate &&
+              !cfg.dynamic_tick_rate,
           {
               // HF tick double at 0x83319518: 30.0 -> 60.0.
               {Op::Width::kBe8, 0x83319519, 0x4E},
@@ -161,11 +164,18 @@ const std::vector<Patch>& Patches() {
   return patches;
 }
 
+namespace {
+std::atomic<uint8_t*> g_guest_base{nullptr};
+}  // namespace
+
+uint8_t* GuestBase() { return g_guest_base.load(std::memory_order_acquire); }
+
 size_t ApplyAll(rex::memory::Memory* memory, const rex::PPCImageInfo& image) {
   if (!memory) {
     REXSYS_ERROR("[patches] no guest memory available; not applying patches");
     return 0;
   }
+  g_guest_base.store(memory->virtual_membase(), std::memory_order_release);
 
   size_t applied = 0;
   size_t skipped = 0;

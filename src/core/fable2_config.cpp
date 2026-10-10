@@ -119,6 +119,35 @@ high_tick_rate = false
 # Default: false
 higher_hf_tick_rate = false
 
+# Dynamic Tick Rate: the game ticks once per frame at whatever frame rate you
+# get, with no frame cap. The HF tick runs once per presented frame and its rate
+# is set to the measured frame rate; LF is always half of HF, the 2:1 ratio the
+# game expects. Every frame then shows exactly one new tick, so motion and text
+# are smooth at Unlimited. Above dynamic_tick_rate_max_hz it ticks every 2nd
+# (3rd, ...) frame instead, which stays even. Under 30 fps the game's own
+# 30/15 Hz timer runs, as in the original. Overrides high_tick_rate and
+# higher_hf_tick_rate (both are ignored while this is on). The log shows
+# changes as "[tick-rate]".
+# false = fixed rates (original, or the two settings above).
+# Default: false
+dynamic_tick_rate = false
+
+# Highest HF tick rate dynamic_tick_rate may run (LF is half of it), 60..240.
+# Above it the game ticks every Nth frame. Rates above 60/30 Hz are beyond what
+# the fixed settings use; lower this if cloth or anything else misbehaves at
+# high frame rates. See docs/patches.md.
+# Default: 144
+dynamic_tick_rate_max_hz = 144
+
+# Interpolation (modern-engine smoothing): text and cloth follow the frame rate
+# instead of the game's slower LF tick. Subtitles and HUD text update on every
+# HF tick (their timers already use real time, so speed is unchanged), and the
+# bodies that push cloth around are blended between the last two animation
+# poses at the moment being drawn, the way the game already draws characters.
+# Works with or without dynamic_tick_rate. The log shows "[interpolation]".
+# Default: false
+interpolation = false
+
 # Disable Motion Blur (mid-asm hook fable2_hook_disable_motion_blur): the
 # camera's full-screen motion blur amount (what scripts set via Camera.SetBlur)
 # is zeroed on its way to the renderer each frame. The camera's own value is
@@ -264,6 +293,15 @@ bool Load(const std::filesystem::path& path) {
     values.higher_hf_tick_rate =
         Read<bool>(patches_table, "patches", "higher_hf_tick_rate", "boolean",
                    values.higher_hf_tick_rate);
+    values.dynamic_tick_rate =
+        Read<bool>(patches_table, "patches", "dynamic_tick_rate", "boolean",
+                   values.dynamic_tick_rate);
+    values.dynamic_tick_rate_max_hz = static_cast<int32_t>(Read<int64_t>(
+        patches_table, "patches", "dynamic_tick_rate_max_hz", "integer",
+        values.dynamic_tick_rate_max_hz));
+    values.interpolation =
+        Read<bool>(patches_table, "patches", "interpolation", "boolean",
+                   values.interpolation);
     values.disable_motion_blur =
         Read<bool>(patches_table, "patches", "disable_motion_blur", "boolean",
                    values.disable_motion_blur);

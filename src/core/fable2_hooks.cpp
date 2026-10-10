@@ -11,9 +11,15 @@
 // Every patch hook is gated on a toggle in fable2_config.toml ([patches]),
 // consulted on each call, so a patch can be A/B'd without a rebuild.
 
+#include <bit>
+#include <cmath>
+#include <cstring>
+
 #include <rex/ppc/context.h>  // PPCRegister (union with u64/s64/u32/... views)
 #include <rex/logging/macros.h>
 
+#include "fable2_patches.h"
+#include "fable2_tick_rate.h"
 #include "fable2_config.h"
 
 // ---------------------------------------------------------------------------
@@ -136,14 +142,24 @@ void fable2_hook_skip_intro_videos(PPCRegister& r3) {
 // returning true jumps past it, which is exactly the Xenia patch's NOP.
 // Without this the game overwrote the patched value (15 Hz -> 30 Hz, written
 // at load by src/core/fable2_patches.cpp) and the patch had no effect.
-// Toggle: [patches] high_tick_rate.
+// Toggle: [patches] high_tick_rate. Also skipped under [patches]
+// dynamic_tick_rate, which owns both rates (src/core/fable2_tick_rate.h).
 bool fable2_hook_high_tick_rate_skip_store() {
   static const bool enabled = [] {
-    const bool on = fable2::config::Get().high_tick_rate;
-    if (on) {
+    const auto& cfg = fable2::config::Get();
+    if (cfg.dynamic_tick_rate) {
+      if (cfg.high_tick_rate || cfg.higher_hf_tick_rate) {
+        REXSYS_WARN("[tick-rate] high_tick_rate / higher_hf_tick_rate ignored: "
+                    "dynamic_tick_rate is on");
+      }
+      REXSYS_INFO("[tick-rate] dynamic: one HF tick per frame at the frame "
+                  "rate, up to {} Hz", fable2::tickrate::MaxHfHz());
+      return true;
+    }
+    if (cfg.high_tick_rate) {
       REXSYS_INFO("[tick-rate] LF tick forced to 30 Hz (high_tick_rate)");
     }
-    return on;
+    return cfg.high_tick_rate;
   }();
   return enabled;
 }
@@ -156,9 +172,13 @@ bool fable2_hook_high_tick_rate_skip_store() {
 // Requires high_tick_rate: on its own (HF 60 Hz with LF 15 Hz, 4:1) it would
 // break the 2:1 ratio the other way, so it is ignored unless both are on.
 // Toggle: [patches] higher_hf_tick_rate (needs [patches] high_tick_rate).
+// Also skipped under [patches] dynamic_tick_rate.
 bool fable2_hook_high_hf_tick_rate_skip_store() {
   static const bool enabled = [] {
     const auto& cfg = fable2::config::Get();
+    if (cfg.dynamic_tick_rate) {
+      return true;  // dynamic_tick_rate owns the rate (see the LF hook above)
+    }
     if (cfg.higher_hf_tick_rate && !cfg.high_tick_rate) {
       REXSYS_WARN("[tick-rate] higher_hf_tick_rate ignored: it requires high_tick_rate");
       return false;
@@ -189,4 +209,116 @@ void fable2_hook_realtime_texture_morphing(PPCRegister& r9) {
     REXSYS_INFO("[texture-morph] building hero/dog textures in realtime (GPU) mode");
   }
   r9.u64 = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Interpolation ([patches] interpolation). Two places where the game shows
+// LF-tick state without blending it to the render time.
+// ---------------------------------------------------------------------------
+namespace {
+
+bool InterpolationEnabled() {
+  static const bool enabled = [] {
+    const bool on = fable2::config::Get().interpolation;
+    if (on) {
+      REXSYS_INFO("[interpolation] on: GUI updates every HF tick, cloth "
+                  "colliders blended between poses");
+    }
+    return on;
+  }();
+  return enabled;
+}
+
+uint8_t* GuestMem(uint32_t addr) {
+  return fable2::patches::GuestBase() + addr + (addr >= 0xE0000000u ? 0x1000u : 0u);
+}
+
+uint32_t LoadU32(uint32_t addr) {
+  uint32_t v;
+  std::memcpy(&v, GuestMem(addr), 4);
+  return __builtin_bswap32(v);
+}
+
+float LoadF32(uint32_t addr) { return std::bit_cast<float>(LoadU32(addr)); }
+
+void StoreF32(uint32_t addr, float f) {
+  const uint32_t v = __builtin_bswap32(std::bit_cast<uint32_t>(f));
+  std::memcpy(GuestMem(addr), &v, 4);
+}
+
+}  // namespace
+
+// GUI every HF tick. sub_82278C90 (run on every HF tick from ProcessGameFrame)
+// calls the front-end object's vtable[2] (sub_82286B40: GUI manager update,
+// subtitles, HUD) only when an LF boundary was crossed (r29) or a query says
+// so; the check starts with `clrlwi r10,r29,24` at 0x82278D1C. That update
+// measures its own elapsed time from the wall clock (sub_822B6D70), so running
+// it every HF tick does not speed anything up; it only updates text twice as
+// often (every frame under dynamic_tick_rate). Returning true jumps to the
+// call at 0x82278D40.
+bool fable2_hook_gui_every_tick() { return InterpolationEnabled(); }
+
+// Cloth colliders blended to the render time. sub_82A895C0 builds the cloth's
+// collision shapes from the driving character's skeleton. Its four loops read
+// a bone straight from the CURRENT pose (*(inst+512)+16, 48-byte bones: quat,
+// translation, scale) right after `add r11,r11,r9`, while the skin it collides
+// with is drawn blended between the previous pose (*(inst+516)) and the
+// current one with the alpha at *(inst+176)+16 (sub_8222E300, using
+// sub_8222E5D0). So the colliders run up to one LF tick ahead of the drawn
+// body and jump on every LF tick. Here r11 is pointed at the same bone blended
+// the way sub_8222E5D0 + sub_8222E300 blend it (quaternion sign-corrected
+// lerp, then normalized; translation and scale lerped), written below the
+// stack pointer: the four loads from r11 that follow run before the next call,
+// so nothing overwrites it in between.
+void fable2_hook_cloth_collider_bone(PPCRegister& r1, PPCRegister& r11,
+                                     PPCRegister& r30) {
+  if (!InterpolationEnabled() || fable2::patches::GuestBase() == nullptr) return;
+  const uint32_t inst = r30.u32;
+  const uint32_t cur_pose = LoadU32(inst + 512);
+  const uint32_t prev_pose = LoadU32(inst + 516);
+  const uint32_t interp = LoadU32(inst + 176);
+  if (cur_pose == 0 || prev_pose == 0 || interp == 0 || prev_pose == cur_pose) {
+    return;
+  }
+  const uint32_t cur_bones = LoadU32(cur_pose + 16);
+  const uint32_t prev_bones = LoadU32(prev_pose + 16);
+  if (cur_bones == 0 || prev_bones == 0) return;
+  const float alpha = LoadF32(interp + 16);
+  if (!(alpha >= 0.0f && alpha < 1.0f)) return;  // 1 = current pose (or NaN)
+
+  const uint32_t cur = r11.u32;
+  const uint32_t prev = prev_bones + (cur - cur_bones);
+  float a[12], b[12];
+  for (int i = 0; i < 12; ++i) {
+    a[i] = LoadF32(prev + 4 * i);
+    b[i] = LoadF32(cur + 4 * i);
+  }
+  const float dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
+  if (dot < 0.0f) {
+    for (int i = 0; i < 4; ++i) b[i] = -b[i];
+  }
+  float out[12];
+  for (int i = 0; i < 12; ++i) out[i] = a[i] + (b[i] - a[i]) * alpha;
+  const float len =
+      std::sqrt(out[0] * out[0] + out[1] * out[1] + out[2] * out[2] + out[3] * out[3]);
+  if (len > 1e-6f) {
+    for (int i = 0; i < 4; ++i) out[i] /= len;
+  }
+  const uint32_t scratch = (r1.u32 - 256) & ~15u;
+  for (int i = 0; i < 12; ++i) StoreF32(scratch + 4 * i, out[i]);
+  r11.u64 = scratch;
+}
+
+// Steady render delay under dynamic_tick_rate. The render thread draws the
+// scene about one LF period in the past: sub_8236C520 loads the LF rate
+// (`lfd f0,-27376(r10)` at 0x8236C5A4) and subtracts 1/LF from now. With
+// dynamic_tick_rate every tick lasts as long as its frame, so the LF global
+// changes every frame, and that delay would jump with it, shaking everything
+// drawn. Here the render side gets the smoothed rate (the measured frame rate)
+// instead, so the delay only drifts slowly.
+void fable2_hook_render_time_lf(PPCRegister& f0) {
+  if (!fable2::tickrate::Enabled()) return;
+  const fable2::tickrate::Plan plan = fable2::tickrate::CurrentPlan();
+  if (plan.frames_per_tick == 0) return;
+  f0.f64 = plan.hf_hz / 2.0;
 }

@@ -38,10 +38,104 @@ the data ops had no effect. The game runs HF at twice LF (30:15). With only
 `high_tick_rate` the ratio becomes 1:1 (30:30) and cloth physics misbehaves,
 so turn on `higher_hf_tick_rate` with it (60:30).
 
+### Dynamic tick rate (`dynamic_tick_rate`, off by default)
+
+The HF tick runs once per presented frame, with no frame cap, and the HF rate
+is set to the measured frame rate (LF always half of it), so each tick moves
+game time by one frame's worth and every frame shows exactly one new tick.
+A rate that only follows the frame rate is not enough: two clocks that are
+merely close drift against each other, frames alternate between a new tick
+and none, and text and motion stutter (seen in the first test at Unlimited).
+Above `dynamic_tick_rate_max_hz` (default 144, clamped to 60..240) it ticks
+every Nth frame (N = ceil(fps / max)). Under 30 fps the game's own 30/15 Hz
+timer runs. It overrides `high_tick_rate` / `higher_hf_tick_rate` and skips
+the same two stores in `sub_8233AE50`. Code: `src/core/fable2_tick_rate.{h,cpp}`,
+the frame counter call in `src/diagnostics/fps_meter.h`, and
+`apply_dynamic_tick_rate` in
+`src/core/hotfunc/frame/ProcessGameFrame_82276C30.cpp`.
+
+How the game uses the rates (read from the codegen output):
+
+- `ProcessGameFrame_82276C30` is the game's fixed-step loop. It reads both
+  doubles **once, on entry** (`compute_frame_timing`: HF period, HF rate, and
+  HF ticks per LF tick = `trunc(HF * (1/LF))`, which must stay 2), then loops,
+  yielding until the next HF tick is due, and can stay in that loop for a
+  whole session. Writing new values to the globals alone would leave the loop
+  on the old rate while every other reader saw the new one, so the new rate is
+  applied inside the loop, between ticks: the loop's own rate registers are
+  re-derived the same way and its anchor moves to the last processed tick,
+  keeping the tick phase continuous.
+- HF (0x83319518) is read in only 4 places: the loop above, two `x / HF`
+  conversions (`sub_82186A80`, `sub_82278AE0`), and a startup initializer
+  (`sub_83242668`) that copies it to 0x83497420 for `sub_8235ABA0`. That copy
+  always equals HF in the original game, so it is updated with HF.
+- LF (0x83319510) is read live in ~450 places, mostly `x / LF` (per-tick
+  delta time, ticks to seconds) and `seconds * LF` (seconds to ticks). No
+  cached copy of LF was found.
+
+The frame rate is the count of `MainRenderLoop_82B9CD68` calls (one per
+presented frame), sampled every 0.25 s and smoothed; it decides one tick per
+frame vs. every Nth frame vs. the game timer, and is what gets logged. In the
+loop, the due-tick rate register (f25) is held at 0 until a new frame is
+presented, then set so exactly one tick is due. That tick lasts exactly the
+real time since the previous one (clamped to 1/(2 * max) .. 1/30 s): HF is
+set to its inverse right before it runs, so game time advances by what each
+frame actually took. With an uneven frame rate a fixed tick length moves
+things too far on short frames and too little on long ones, which reads as
+judder. The game clock is nudged by at most 5% of a period toward real time;
+a gap over the clamp runs up to 3 catch-up ticks back to back, and a longer
+one (a load) resyncs to now, like the original.
+
+The render thread draws one LF period in the past (`sub_8236C520` subtracts
+1/LF from now). Since LF now changes every frame, the hook
+`fable2_hook_render_time_lf` (0x8236C5A4) gives that code the smoothed rate
+instead, so the delay does not jump frame to frame.
+
+Rate changes are logged when they move more than 10%:
+`[tick-rate] dynamic: HF 143.8 Hz, LF 71.9 Hz, one tick per frame, each as long as its frame (frame rate 143.8 fps)`.
+
+Known limits:
+
+- A duration the game already converted to LF ticks (`seconds * LF`, then
+  counted down per tick) keeps its tick count while the tick length changes,
+  so a timer running across a frame-rate swing finishes slightly early or
+  late. Durations converted on every tick follow the real time.
+- Tested in game (2026-10-10, 30 to 90 fps on an RTX 5080 at Unlimited):
+  normal game speed, cloth mostly fine, the frame rate about the same as
+  with the option off. Text and motion still judder when the frame rate
+  swings hard; that is uneven frame delivery, which no tick timing can hide.
+  Logic that counts LF ticks without going through the rate runs faster at
+  high frame rates, the same risk `high_tick_rate` takes at 30 Hz, but larger.
+- Every HF tick costs CPU, so ticking at a high frame rate can lower the
+  frame rate; the loop then simply follows the lower rate.
+
 This is the fundamental recomp vs. emulator split: **data patches work, code
 patches don't** (a code patch here would mean editing the recompiled C++ at
 build time, which codegen would clobber on the next run), so every code op is
 a mid-asm hook.
+
+### Interpolation (`interpolation`, off by default)
+
+The game updates gameplay, AI, scripts and the GUI only on LF ticks, which
+are every other HF tick. Characters are already drawn blended between their
+last two LF poses at the render time (the engine's own interpolator at
+instance+176, applied by sub_8222E300), and the camera is blended with the HF
+fraction. Two things were not, and this option fixes them:
+
+- **Text (subtitles, HUD).** sub_82278C90 calls the front-end GUI update
+  (vtable[2], sub_82286B40) only when an LF boundary was crossed. The GUI
+  measures its own elapsed time from the wall clock (sub_822B6D70), so the
+  hook `fable2_hook_gui_every_tick` (0x82278D1C) runs it on every HF tick
+  without changing its speed. Under `dynamic_tick_rate` that is every frame.
+- **Cloth colliders.** sub_82A895C0 builds the cloth's collision shapes from
+  the raw current pose, while the body is drawn blended, so the colliders ran
+  up to one LF tick ahead and jumped every LF tick.
+  `fable2_hook_cloth_collider_bone` (four sites, after `add r11,r11,r9`)
+  points each read at the same bone blended the way the renderer blends it.
+
+Works with or without `dynamic_tick_rate`; with fixed ticks the text still
+only updates at the HF rate. Tested in game (2026-10-10): builds, runs, the
+GUI updates every tick; no in-game report on cloth with it yet.
 
 ## Validation (2026-09-15)
 

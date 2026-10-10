@@ -68,6 +68,19 @@ struct Values {
   // Rate" by Ultra; data write in src/core/fable2_patches.cpp + hook
   // fable2_hook_high_hf_tick_rate_skip_store). Requires high_tick_rate.
   bool higher_hf_tick_rate = false;
+  // [patches] dynamic_tick_rate: the HF tick runs once per presented frame
+  // at the measured frame rate (LF = HF / 2), no frame cap
+  // (src/core/fable2_tick_rate.h). Overrides high_tick_rate /
+  // higher_hf_tick_rate. false = off.
+  bool dynamic_tick_rate = false;
+  // [patches] dynamic_tick_rate_max_hz: highest HF rate dynamic_tick_rate may
+  // run (above it, one tick every Nth frame). Clamped to 60..240.
+  int32_t dynamic_tick_rate_max_hz = 144;
+  // [patches] interpolation: update the GUI (subtitles, HUD text) on every HF
+  // tick instead of every LF tick, and blend cloth colliders between the last
+  // two animation poses at the render time (hooks fable2_hook_gui_every_tick
+  // and fable2_hook_cloth_collider_bone). false = off.
+  bool interpolation = false;
   // [patches] disable_motion_blur: zero the full-screen motion blur amount the
   // camera passes to the renderer (hook fable2_hook_disable_motion_blur in
   // src/core/fable2_hooks.cpp). false = original.

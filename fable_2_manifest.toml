@@ -149,6 +149,50 @@ name = "fable2_hook_high_hf_tick_rate_skip_store"
 registers = []
 jump_address_on_true = 0x8233AE9C
 
+# Interpolation ([patches] interpolation; hooks in src/core/fable2_hooks.cpp).
+# GUI every HF tick: sub_82278C90 calls the front-end GUI update (vtable[2] at
+# 0x82278D40) only on LF ticks; the check starts with `clrlwi r10,r29,24` at
+# 0x82278D1C. Returning true jumps straight to the call.
+[[entrypoint.midasm_hook]]
+address = 0x82278D1C
+name = "fable2_hook_gui_every_tick"
+registers = []
+jump_address_on_true = 0x82278D40
+
+# Cloth colliders: sub_82A895C0 reads each collider bone from the current
+# animation pose right after `add r11,r11,r9` (four loops). The hook points r11
+# at that bone blended between the previous and current pose at the render
+# time.
+[[entrypoint.midasm_hook]]
+address = 0x82A8965C
+name = "fable2_hook_cloth_collider_bone"
+registers = ["r1", "r11", "r30"]
+after_instruction = true
+[[entrypoint.midasm_hook]]
+address = 0x82A89770
+name = "fable2_hook_cloth_collider_bone"
+registers = ["r1", "r11", "r30"]
+after_instruction = true
+[[entrypoint.midasm_hook]]
+address = 0x82A898A8
+name = "fable2_hook_cloth_collider_bone"
+registers = ["r1", "r11", "r30"]
+after_instruction = true
+[[entrypoint.midasm_hook]]
+address = 0x82A899E4
+name = "fable2_hook_cloth_collider_bone"
+registers = ["r1", "r11", "r30"]
+after_instruction = true
+
+# Dynamic tick rate ([patches] dynamic_tick_rate): the render thread's "draw
+# one LF period in the past" delay uses the smoothed rate, not the per-frame
+# one (sub_8236C520, right after `lfd f0,-27376(r10)`).
+[[entrypoint.midasm_hook]]
+address = 0x8236C5A4
+name = "fable2_hook_render_time_lf"
+registers = ["f0"]
+after_instruction = true
+
 # Skip Intro Videos (just-harry's "Skip intro videos" patch from his
 # Unofficial Xenia femtofork, as a hook). sub_822F4958 builds the boot video
 # queue: slot 0 = microsoft_logo.bik, slot 1 = lionhead_logo.bik, slot 2 =

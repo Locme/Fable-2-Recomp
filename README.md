@@ -118,8 +118,11 @@ game recreates it with defaults on launch if it is ever missing. Loaded in
   (`src/core/fable2_hooks.cpp`) — flip one and relaunch to A/B a patch with no
   rebuild. This includes `high_tick_rate` and `higher_hf_tick_rate` (Xenia
   "High Tick Rate" / "Higher HF Tick Rate"; turn both on together), which
-  also drive the guest-image data writes below. There is no separate patch
-  file.
+  also drive the guest-image data writes below, `dynamic_tick_rate`, which
+  instead runs one tick per presented frame, and `interpolation`, which
+  updates text every tick and keeps cloth in step with the drawn body (see
+  `docs/patches.md`, "Dynamic tick rate" and "Interpolation"). There is no
+  separate patch file.
 
 
 
