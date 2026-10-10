@@ -388,6 +388,7 @@ class Fable2App : public rex::ReXApp {
   // (loaded earlier, in OnPostInitLogging).
   void OnPostLoadXexImage() override {
     fable2::patches::ApplyAll(runtime()->memory(), PPCImageConfig);
+    fable2::quickboot::SetMemory(runtime()->memory());
   }
 
   // Startup integrity check: this build was recompiled against a specific

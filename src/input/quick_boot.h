@@ -48,7 +48,6 @@
 #include <rex/input/input_driver.h>
 #include <rex/input/input_system.h>
 #include <rex/logging/macros.h>
-#include <rex/system/kernel_state.h>
 #include <rex/system/xmemory.h>
 
 #ifdef _WIN32
@@ -120,10 +119,21 @@ inline bool Readable(const void* p, unsigned long* out_state = nullptr,
 #endif
 }
 
+// The runtime's guest memory, handed over by the app once the image is
+// loaded (see OnPostLoadXexImage in fable_2_app.h).
+inline std::atomic<rex::memory::Memory*>& memory() {
+  static std::atomic<rex::memory::Memory*> m{nullptr};
+  return m;
+}
+
+inline void SetMemory(rex::memory::Memory* m) {
+  memory().store(m, std::memory_order_release);
+}
+
 // Host pointer for a guest address, using the runtime's own mapping (the
 // heap a guest address lives in can sit at an offset from the base).
 inline const uint8_t* GuestPtr(uint32_t guest_addr) {
-  auto* mem = rex::system::kernel_memory();
+  auto* mem = memory().load(std::memory_order_acquire);
   if (!mem) return nullptr;
   return mem->TranslateVirtual<const uint8_t*>(guest_addr);
 }
