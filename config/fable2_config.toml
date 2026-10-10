@@ -72,6 +72,21 @@ unlock_ce = true
 # Default: false
 skip_intro_videos = false
 
+# Quick boot (mid-asm hook fable2_hook_quick_boot_can_press_a, see
+# src/input/quick_boot.h): presses A on the "Press A" title screen as soon as
+# the game will take it, then picks Continue on the main menu, so the game
+# boots straight into your last save. The presses come from a built-in
+# virtual pad and wait for the game's own front-end state. It runs once per
+# launch, and stops (leaving the menu to you) if the attract movie starts or
+# a game is already loading. false = normal boot.
+# Default: false
+quick_boot = false
+
+# How long (ms) the main menu must sit idle before quick boot picks Continue.
+# Raise it if the Continue press lands before the menu is ready (0..30000).
+# Default: 3000
+quick_boot_menu_delay_ms = 3000
+
 # High Tick Rate (Xenia patch by Guy, plus mid-asm hook
 # fable2_hook_high_tick_rate_skip_store): doubles the game's LF tick from
 # 15 Hz to 30 Hz. Vastly improves in-game UI framerate and input delay.
@@ -117,21 +132,6 @@ realtime_texture_morphing = true
 # false = original black bug.
 # Default: false
 hero_dog_texture_readback = false
-
-# Quick boot (mid-asm hook fable2_hook_quick_boot_can_press_a, see
-# src/input/quick_boot.h): presses A on the "Press A" title screen as soon as
-# the game will take it, then picks Continue on the main menu, so the game
-# boots straight into your last save. The presses come from a built-in
-# virtual pad and wait for the game's own front-end state. It runs once per
-# launch, and stops (leaving the menu to you) if the attract movie starts or
-# a game is already loading. false = normal boot.
-# Default: false
-quick_boot = false
-
-# How long (ms) the main menu must sit idle before quick boot picks Continue.
-# Raise it if the Continue press lands before the menu is ready (0..30000).
-# Default: 3000
-quick_boot_menu_delay_ms = 3000
 
 [perf]
 # NtYieldExecution batching for the hot-function overrides (see

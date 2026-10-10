@@ -60,6 +60,14 @@ struct Values {
   // intro videos"; hook fable2_hook_skip_intro_videos in
   // src/core/fable2_hooks.cpp). false = original.
   bool skip_intro_videos = false;
+  // [patches] quick_boot: at boot, press A on the title screen and then pick
+  // Continue on the main menu, so the game loads the last save (synthetic pad
+  // gated on the front-end state; src/input/quick_boot.h, hook
+  // fable2_hook_quick_boot_can_press_a). false = original.
+  bool quick_boot = false;
+  // [patches] quick_boot_menu_delay_ms: how long the front end must sit idle on
+  // the main menu before quick boot presses Up/Down/A (range 0..30000).
+  int32_t quick_boot_menu_delay_ms = 3000;
   // [patches] high_tick_rate: LF tick 15 -> 30 Hz (Xenia "High Tick Rate" by
   // Guy; data write in src/core/fable2_patches.cpp + hook
   // fable2_hook_high_tick_rate_skip_store). false = original.
@@ -87,14 +95,6 @@ struct Values {
   // Fable2App; readback then happens only for that resolve, not every frame.
   // Superseded by realtime_texture_morphing (only takes effect with that off).
   bool hero_dog_texture_readback = false;
-  // [patches] quick_boot: at boot, press A on the title screen and then pick
-  // Continue on the main menu, so the game loads the last save (synthetic pad
-  // gated on the front-end state; src/input/quick_boot.h, hook
-  // fable2_hook_quick_boot_can_press_a). false = original.
-  bool quick_boot = false;
-  // [patches] quick_boot_menu_delay_ms: how long the front end must sit idle on
-  // the main menu before quick boot presses Up/Down/A (range 0..30000).
-  int32_t quick_boot_menu_delay_ms = 3000;
   // [perf] - hot-function override tuning.
   // hotfunc_yield_every: NtYieldExecution batching factor for the hotfunc
   // overrides (see src/core/hotfunc/hotfunc_yield.h). Every Nth call does
