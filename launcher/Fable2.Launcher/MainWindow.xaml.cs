@@ -967,7 +967,7 @@ public partial class MainWindow : Window
             "Skip the Microsoft and Lionhead logo videos at boot.", _advanced.SkipIntroVideos);
         AddPatchRow("Interpolation", "interpolation",
             "Update subtitles and HUD text every frame, and keep cloth in step with the drawn body.",
-            _advanced.Interpolation, unstable: true);
+            _advanced.Interpolation);
         AddPatchRow("Disable Motion Blur", "disable_motion_blur",
             "Zero the camera's full-screen motion blur amount each frame.", _advanced.DisableMotionBlur);
         AddPatchRow("Realtime Texture Morphing", "realtime_texture_morphing",

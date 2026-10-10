@@ -79,8 +79,8 @@ skip_intro_videos = false
 # are blended between the last two animation poses at the moment being drawn,
 # the way the game already draws characters. The log shows "[interpolation]".
 # false = text and cloth colliders update on LF ticks only (original).
-# Default: false
-interpolation = false
+# Default: true
+interpolation = true
 
 # Disable Motion Blur (mid-asm hook fable2_hook_disable_motion_blur): the
 # camera's full-screen motion blur amount (what scripts set via Camera.SetBlur)

@@ -29,7 +29,7 @@ public class Fable2ConfigValues
     public bool UnlockWebsite { get; set; } = true;
     public bool UnlockCe { get; set; } = true;
     public bool SkipIntroVideos { get; set; } = false;
-    public bool Interpolation { get; set; } = false;       // unstable
+    public bool Interpolation { get; set; } = true;
     public bool DisableMotionBlur { get; set; } = false;
     public bool RealtimeTextureMorphing { get; set; } = true;
     public bool HeroDogTextureReadback { get; set; } = false;

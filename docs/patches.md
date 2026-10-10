@@ -110,7 +110,7 @@ Known limits:
 - Every HF tick costs CPU, so ticking at a high frame rate can lower the
   frame rate; the loop then simply follows the lower rate.
 
-### Interpolation (`interpolation`, off by default)
+### Interpolation (`interpolation`, on by default)
 
 The game updates gameplay, AI, scripts and the GUI only on LF ticks, which
 are every other HF tick. Characters are already drawn blended between their
