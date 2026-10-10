@@ -25,20 +25,18 @@ of Xenia's game-patches (`patch.toml`) format.
 - Every op is logged: `[patches] <patch> be8 0xADDR: 0xOLD -> 0xNEW
   (data: takes effect at runtime)`, plus a summary line.
 
-## Current patches (both default to **disabled**)
+## Current patches
 
-| Config key | Xenia patch | Data op (this table) | Code op (mid-asm hook) |
-|---|---|---|---|
-| `high_tick_rate` | High Tick Rate (Guy) | be8 0x83319511 = 0x3E (LF tick double 0x83319510: 15.0 → 30.0) | NOP of the store at 0x8233AEB4 → `fable2_hook_high_tick_rate_skip_store` |
-| `higher_hf_tick_rate` | Higher HF Tick Rate (Ultra) | be8 0x83319519 = 0x4E (HF tick double 0x83319518: 30.0 → 60.0) | NOP of the store at 0x8233AE98 → `fable2_hook_high_hf_tick_rate_skip_store` |
+None. The Xenia "High Tick Rate" and "Higher HF Tick Rate" patches (fixed
+30/60 Hz ticks) were removed: the dynamic tick rate below replaces them. The
+table in `fable2_patches.cpp` is kept, empty, for future data patches.
 
-Both stores are in `sub_8233AE50` (game init) and are the only writers of
-those doubles; without the hooks the game overwrote the patched values and
-the data ops had no effect. The game runs HF at twice LF (30:15). With only
-`high_tick_rate` the ratio becomes 1:1 (30:30) and cloth physics misbehaves,
-so turn on `higher_hf_tick_rate` with it (60:30).
+This is the fundamental recomp vs. emulator split: **data patches work, code
+patches don't** (a code patch here would mean editing the recompiled C++ at
+build time, which codegen would clobber on the next run), so every code op is
+a mid-asm hook.
 
-### Dynamic tick rate (`dynamic_tick_rate`, off by default)
+### Dynamic tick rate (always on, no config key)
 
 The HF tick runs once per presented frame, with no frame cap, and the HF rate
 is set to the measured frame rate (LF always half of it), so each tick moves
@@ -46,10 +44,12 @@ game time by one frame's worth and every frame shows exactly one new tick.
 A rate that only follows the frame rate is not enough: two clocks that are
 merely close drift against each other, frames alternate between a new tick
 and none, and text and motion stutter (seen in the first test at Unlimited).
-Above `dynamic_tick_rate_max_hz` (default 144, clamped to 60..240) it ticks
-every Nth frame (N = ceil(fps / max)). Under 30 fps the game's own 30/15 Hz
-timer runs. It overrides `high_tick_rate` / `higher_hf_tick_rate` and skips
-the same two stores in `sub_8233AE50`. Code: `src/core/fable2_tick_rate.{h,cpp}`,
+Above 144 Hz (`kMaxHfHz`) it ticks every Nth frame (N = ceil(fps / 144)).
+Under 30 fps the game's own 30/15 Hz timer runs, so a 30 fps frame limit plays
+like the original game (30 Hz HF, 15 Hz LF); that is the way to get the
+original timing back. Game init (`sub_8233AE50`) is the only other writer of
+the two rate doubles; `fable2_hook_skip_tick_rate_store` skips both stores
+(0x8233AE98, 0x8233AEB4) so they cannot undo the current rate. Code: `src/core/fable2_tick_rate.{h,cpp}`,
 the frame counter call in `src/diagnostics/fps_meter.h`, and
 `apply_dynamic_tick_rate` in
 `src/core/hotfunc/frame/ProcessGameFrame_82276C30.cpp`.
@@ -102,17 +102,13 @@ Known limits:
   late. Durations converted on every tick follow the real time.
 - Tested in game (2026-10-10, 30 to 90 fps on an RTX 5080 at Unlimited):
   normal game speed, cloth mostly fine, the frame rate about the same as
-  with the option off. Text and motion still judder when the frame rate
+  with fixed 30/15 Hz ticks. Text and motion still judder when the frame rate
   swings hard; that is uneven frame delivery, which no tick timing can hide.
   Logic that counts LF ticks without going through the rate runs faster at
-  high frame rates, the same risk `high_tick_rate` takes at 30 Hz, but larger.
+  high frame rates (the old fixed High Tick Rate patch had the same risk at
+  30 Hz LF).
 - Every HF tick costs CPU, so ticking at a high frame rate can lower the
   frame rate; the loop then simply follows the lower rate.
-
-This is the fundamental recomp vs. emulator split: **data patches work, code
-patches don't** (a code patch here would mean editing the recompiled C++ at
-build time, which codegen would clobber on the next run), so every code op is
-a mid-asm hook.
 
 ### Interpolation (`interpolation`, off by default)
 
@@ -126,15 +122,14 @@ fraction. Two things were not, and this option fixes them:
   (vtable[2], sub_82286B40) only when an LF boundary was crossed. The GUI
   measures its own elapsed time from the wall clock (sub_822B6D70), so the
   hook `fable2_hook_gui_every_tick` (0x82278D1C) runs it on every HF tick
-  without changing its speed. Under `dynamic_tick_rate` that is every frame.
+  without changing its speed. With the dynamic tick rate that is every frame.
 - **Cloth colliders.** sub_82A895C0 builds the cloth's collision shapes from
   the raw current pose, while the body is drawn blended, so the colliders ran
   up to one LF tick ahead and jumped every LF tick.
   `fable2_hook_cloth_collider_bone` (four sites, after `add r11,r11,r9`)
   points each read at the same bone blended the way the renderer blends it.
 
-Works with or without `dynamic_tick_rate`; with fixed ticks the text still
-only updates at the HF rate. Tested in game (2026-10-10): builds, runs, the
+Tested in game (2026-10-10): builds, runs, the
 GUI updates every tick; no in-game report on cloth with it yet.
 
 ## Validation (2026-09-15)

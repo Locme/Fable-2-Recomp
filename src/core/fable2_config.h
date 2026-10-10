@@ -44,8 +44,7 @@ struct Values {
   int32_t mouse_look_scale = 256;  // range 1..4096 (cvar constraint)
   // [patches] - toggles for the recomp-level (mid-asm hook) patches. The
   // hook bodies consult these at runtime (src/core/fable2_hooks.cpp), so a patch
-  // can be A/B'd with no rebuild. high_tick_rate / higher_hf_tick_rate also
-  // drive the guest-image data writes in src/core/fable2_patches.cpp.
+  // can be A/B'd with no rebuild.
   // Unlock the Guild-chest items that were obtainable from the (now-dead)
   // Fable 2 website. Forces both the registration gates and the grant-method
   // result in GuildChest_GetWebsiteItem_8256E368 (hooks
@@ -60,22 +59,6 @@ struct Values {
   // intro videos"; hook fable2_hook_skip_intro_videos in
   // src/core/fable2_hooks.cpp). false = original.
   bool skip_intro_videos = false;
-  // [patches] high_tick_rate: LF tick 15 -> 30 Hz (Xenia "High Tick Rate" by
-  // Guy; data write in src/core/fable2_patches.cpp + hook
-  // fable2_hook_high_tick_rate_skip_store). false = original.
-  bool high_tick_rate = false;
-  // [patches] higher_hf_tick_rate: HF tick 30 -> 60 Hz (Xenia "Higher HF Tick
-  // Rate" by Ultra; data write in src/core/fable2_patches.cpp + hook
-  // fable2_hook_high_hf_tick_rate_skip_store). Requires high_tick_rate.
-  bool higher_hf_tick_rate = false;
-  // [patches] dynamic_tick_rate: the HF tick runs once per presented frame
-  // at the measured frame rate (LF = HF / 2), no frame cap
-  // (src/core/fable2_tick_rate.h). Overrides high_tick_rate /
-  // higher_hf_tick_rate. false = off.
-  bool dynamic_tick_rate = false;
-  // [patches] dynamic_tick_rate_max_hz: highest HF rate dynamic_tick_rate may
-  // run (above it, one tick every Nth frame). Clamped to 60..240.
-  int32_t dynamic_tick_rate_max_hz = 144;
   // [patches] interpolation: update the GUI (subtitles, HUD text) on every HF
   // tick instead of every LF tick, and blend cloth colliders between the last
   // two animation poses at the render time (hooks fable2_hook_gui_every_tick

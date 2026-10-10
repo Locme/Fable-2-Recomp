@@ -29,9 +29,6 @@ public class Fable2ConfigValues
     public bool UnlockWebsite { get; set; } = true;
     public bool UnlockCe { get; set; } = true;
     public bool SkipIntroVideos { get; set; } = false;
-    public bool HighTickRate { get; set; } = false;       // unstable
-    public bool HigherHfTickRate { get; set; } = false;    // unstable
-    public bool DynamicTickRate { get; set; } = false;     // unstable
     public bool Interpolation { get; set; } = false;       // unstable
     public bool DisableMotionBlur { get; set; } = false;
     public bool RealtimeTextureMorphing { get; set; } = true;
@@ -119,9 +116,6 @@ public static class Fable2ConfigFile
                     if (key == "unlock_website") values.UnlockWebsite = ParseBool(rawValue, values.UnlockWebsite);
                     else if (key == "unlock_ce") values.UnlockCe = ParseBool(rawValue, values.UnlockCe);
                     else if (key == "skip_intro_videos") values.SkipIntroVideos = ParseBool(rawValue, values.SkipIntroVideos);
-                    else if (key == "high_tick_rate") values.HighTickRate = ParseBool(rawValue, values.HighTickRate);
-                    else if (key == "higher_hf_tick_rate") values.HigherHfTickRate = ParseBool(rawValue, values.HigherHfTickRate);
-                    else if (key == "dynamic_tick_rate") values.DynamicTickRate = ParseBool(rawValue, values.DynamicTickRate);
                     else if (key == "interpolation") values.Interpolation = ParseBool(rawValue, values.Interpolation);
                     else if (key == "disable_motion_blur") values.DisableMotionBlur = ParseBool(rawValue, values.DisableMotionBlur);
                     else if (key == "realtime_texture_morphing") values.RealtimeTextureMorphing = ParseBool(rawValue, values.RealtimeTextureMorphing);
@@ -165,9 +159,6 @@ public static class Fable2ConfigFile
             ("patches", "unlock_website", values.UnlockWebsite ? "true" : "false"),
             ("patches", "unlock_ce", values.UnlockCe ? "true" : "false"),
             ("patches", "skip_intro_videos", values.SkipIntroVideos ? "true" : "false"),
-            ("patches", "high_tick_rate", values.HighTickRate ? "true" : "false"),
-            ("patches", "higher_hf_tick_rate", values.HigherHfTickRate ? "true" : "false"),
-            ("patches", "dynamic_tick_rate", values.DynamicTickRate ? "true" : "false"),
             ("patches", "interpolation", values.Interpolation ? "true" : "false"),
             ("patches", "disable_motion_blur", values.DisableMotionBlur ? "true" : "false"),
             ("patches", "realtime_texture_morphing", values.RealtimeTextureMorphing ? "true" : "false"),

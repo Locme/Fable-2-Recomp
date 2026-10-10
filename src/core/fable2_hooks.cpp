@@ -137,58 +137,17 @@ void fable2_hook_skip_intro_videos(PPCRegister& r3) {
   }
 }
 
-// High Tick Rate (Xenia patch by Guy), code half. Runs BEFORE the store at
-// 0x8233AEB4 that writes the game's LF tick-rate double (0x83319510);
-// returning true jumps past it, which is exactly the Xenia patch's NOP.
-// Without this the game overwrote the patched value (15 Hz -> 30 Hz, written
-// at load by src/core/fable2_patches.cpp) and the patch had no effect.
-// Toggle: [patches] high_tick_rate. Also skipped under [patches]
-// dynamic_tick_rate, which owns both rates (src/core/fable2_tick_rate.h).
-bool fable2_hook_high_tick_rate_skip_store() {
-  static const bool enabled = [] {
-    const auto& cfg = fable2::config::Get();
-    if (cfg.dynamic_tick_rate) {
-      if (cfg.high_tick_rate || cfg.higher_hf_tick_rate) {
-        REXSYS_WARN("[tick-rate] high_tick_rate / higher_hf_tick_rate ignored: "
-                    "dynamic_tick_rate is on");
-      }
-      REXSYS_INFO("[tick-rate] dynamic: one HF tick per frame at the frame "
-                  "rate, up to {} Hz", fable2::tickrate::MaxHfHz());
-      return true;
-    }
-    if (cfg.high_tick_rate) {
-      REXSYS_INFO("[tick-rate] LF tick forced to 30 Hz (high_tick_rate)");
-    }
-    return cfg.high_tick_rate;
+// Tick-rate stores. Game init (sub_8233AE50) writes the HF and LF tick-rate
+// doubles (0x83319518 at 0x8233AE98, 0x83319510 at 0x8233AEB4). The dynamic
+// tick rate owns both (src/core/fable2_tick_rate.h), so the stores are
+// skipped: returning true jumps past each one.
+bool fable2_hook_skip_tick_rate_store() {
+  static const bool logged = [] {
+    REXSYS_INFO("[tick-rate] dynamic: one HF tick per frame at the frame "
+                "rate, up to {:.0f} Hz", fable2::tickrate::kMaxHfHz);
+    return true;
   }();
-  return enabled;
-}
-
-// Higher HF Tick Rate (Xenia patch by Ultra), code half. Runs BEFORE the store
-// at 0x8233AE98 that writes the HF tick double (0x83319518, normally 30 Hz =
-// twice the 15 Hz LF tick). Skipping it keeps the patched 60 Hz, so with
-// high_tick_rate on the HF:LF ratio stays 2:1 (60:30) instead of collapsing
-// to 1:1 (30:30), which made cloth physics misbehave.
-// Requires high_tick_rate: on its own (HF 60 Hz with LF 15 Hz, 4:1) it would
-// break the 2:1 ratio the other way, so it is ignored unless both are on.
-// Toggle: [patches] higher_hf_tick_rate (needs [patches] high_tick_rate).
-// Also skipped under [patches] dynamic_tick_rate.
-bool fable2_hook_high_hf_tick_rate_skip_store() {
-  static const bool enabled = [] {
-    const auto& cfg = fable2::config::Get();
-    if (cfg.dynamic_tick_rate) {
-      return true;  // dynamic_tick_rate owns the rate (see the LF hook above)
-    }
-    if (cfg.higher_hf_tick_rate && !cfg.high_tick_rate) {
-      REXSYS_WARN("[tick-rate] higher_hf_tick_rate ignored: it requires high_tick_rate");
-      return false;
-    }
-    if (cfg.higher_hf_tick_rate) {
-      REXSYS_INFO("[tick-rate] HF tick forced to 60 Hz (higher_hf_tick_rate)");
-    }
-    return cfg.higher_hf_tick_rate;
-  }();
-  return enabled;
+  return logged;
 }
 
 // Realtime Texture Morphing (hero/dog black textures without CPU readback;
@@ -249,7 +208,7 @@ float LoadF32(uint32_t addr) { return std::bit_cast<float>(LoadU32(addr)); }
 // so; the check starts with `clrlwi r10,r29,24` at 0x82278D1C. That update
 // measures its own elapsed time from the wall clock (sub_822B6D70), so running
 // it every HF tick does not speed anything up; it only updates text twice as
-// often (every frame under dynamic_tick_rate). Returning true jumps to the
+// often (every frame with the dynamic tick rate). Returning true jumps to the
 // call at 0x82278D40.
 bool fable2_hook_gui_every_tick() { return InterpolationEnabled(); }
 
@@ -315,15 +274,14 @@ void fable2_hook_cloth_collider_bone(PPCRegister& r1, PPCRegister& r11,
   r11.u64 = scratch;
 }
 
-// Steady render delay under dynamic_tick_rate. The render thread draws the
+// Steady render delay under the dynamic tick rate. The render thread draws the
 // scene about one LF period in the past: sub_8236C520 loads the LF rate
 // (`lfd f0,-27376(r10)` at 0x8236C5A4) and subtracts 1/LF from now. With
-// dynamic_tick_rate every tick lasts as long as its frame, so the LF global
+// the dynamic tick rate every tick lasts as long as its frame, so the LF global
 // changes every frame, and that delay would jump with it, shaking everything
 // drawn. Here the render side gets the smoothed rate (the measured frame rate)
 // instead, so the delay only drifts slowly.
 void fable2_hook_render_time_lf(PPCRegister& f0) {
-  if (!fable2::tickrate::Enabled()) return;
   const fable2::tickrate::Plan plan = fable2::tickrate::CurrentPlan();
   if (plan.frames_per_tick == 0) return;
   f0.f64 = plan.hf_hz / 2.0;

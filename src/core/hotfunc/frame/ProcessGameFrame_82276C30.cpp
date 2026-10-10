@@ -27,9 +27,8 @@
 // generated copy keeps each statement visible so this file stays a 1:1
 // comparison against the recompiler output.
 //
-// One addition that is not guest code: with [patches] dynamic_tick_rate on,
-// apply_dynamic_tick_rate runs at the top of each loop pass and locks the HF
-// tick to the presented frames. With the option off it is not called.
+// One addition that is not guest code: apply_dynamic_tick_rate runs at the
+// top of each loop pass and locks the HF tick to the presented frames.
 //
 // The recompiler emits recompiled guest functions as WEAK extern "C" aliases
 // of __imp__ProcessGameFrame_82276C30; fable_2_register.cpp registers the ALIAS in the
@@ -474,7 +473,7 @@ static __attribute__((noinline)) bool frame_gate(PPCContext& ctx, uint8_t* base)
 	return true;
 }
 
-// [patches] dynamic_tick_rate (src/core/fable2_tick_rate.h). Not guest code.
+// Dynamic tick rate (src/core/fable2_tick_rate.h). Not guest code.
 // Runs at the top of each loop pass, before compute_loop_timing. Loop state
 // (callee-saved, live across the loop):
 //   f27 = HF period, f25 = HF rate, r25 = HF ticks per LF tick (2),
@@ -572,7 +571,7 @@ static __attribute__((noinline)) void apply_dynamic_tick_rate(PPCContext& ctx, u
 	// that tick). With no frame for a full original tick (a render stall) the
 	// tick runs anyway. Catch-up ticks run back to back.
 	const double since_real = now - last_tick_real;
-	const double min_period = 1.0 / (2.0 * fable2::tickrate::MaxHfHz());
+	const double min_period = 1.0 / (2.0 * fable2::tickrate::kMaxHfHz);
 	const double max_period = 1.0 / fable2::tickrate::kMinHfHz;
 	const bool due = catchup > 0 || (frame_due && since_real >= min_period) ||
 	                 since_real >= max_period;
@@ -1219,7 +1218,7 @@ extern "C" void ProcessGameFrame_82276C30(PPCContext& __restrict ctx, uint8_t* b
 	// ===== Main per-frame work loop: drain pending work, decrement the budget =====
 	do {
 	if (!frame_gate(ctx, base)) break;
-	if (fable2::tickrate::Enabled()) apply_dynamic_tick_rate(ctx, base);
+	apply_dynamic_tick_rate(ctx, base);
 	compute_loop_timing(ctx, base);
 	// ble 0x82277208  (big block runs when cr0.gt, else yield)
 	if (ctx.cr0.gt) {

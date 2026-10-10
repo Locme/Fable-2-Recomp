@@ -8,8 +8,6 @@
 #include <cmath>
 #include <mutex>
 
-#include "fable2_config.h"
-
 namespace fable2::tickrate {
 namespace {
 
@@ -54,7 +52,7 @@ void Publish(double fps) {
     }
     return;
   }
-  const int n = std::max(1, static_cast<int>(std::ceil(fps / MaxHfHz())));
+  const int n = std::max(1, static_cast<int>(std::ceil(fps / kMaxHfHz)));
   const double hf = fps / n;
   if (cur.frames_per_tick == n &&
       std::fabs(hf - cur.hf_hz) <= cur.hf_hz * kRateTolerance) {
@@ -65,19 +63,7 @@ void Publish(double fps) {
 
 }  // namespace
 
-bool Enabled() {
-  static const bool enabled = fable2::config::Get().dynamic_tick_rate;
-  return enabled;
-}
-
-int MaxHfHz() {
-  static const int max_hz =
-      std::clamp(fable2::config::Get().dynamic_tick_rate_max_hz, 60, 240);
-  return max_hz;
-}
-
 void OnRenderFrame() {
-  if (!Enabled()) return;
   g_frames.fetch_add(1, std::memory_order_release);
 
   // The main loop is normally entered from one thread; try_lock keeps a

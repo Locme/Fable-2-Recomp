@@ -72,48 +72,13 @@ unlock_ce = true
 # Default: false
 skip_intro_videos = false
 
-# High Tick Rate (Xenia patch by Guy, plus mid-asm hook
-# fable2_hook_high_tick_rate_skip_store): doubles the game's LF tick from
-# 15 Hz to 30 Hz. Vastly improves in-game UI framerate and input delay.
-# Use together with higher_hf_tick_rate. false = original 15 Hz.
-# Default: false
-high_tick_rate = false
-
-# Higher HF Tick Rate (Xenia patch by Ultra, plus mid-asm hook
-# fable2_hook_high_hf_tick_rate_skip_store): doubles the HF tick from 30 Hz to
-# 60 Hz. The game expects HF to run at twice LF; with high_tick_rate alone
-# both run at 30 Hz and cloth physics misbehaves. Turn this on whenever
-# high_tick_rate is on. Requires high_tick_rate: ignored when that is false.
-# false = original 30 Hz.
-# Default: false
-higher_hf_tick_rate = false
-
-# Dynamic Tick Rate: the game ticks once per frame at whatever frame rate you
-# get, with no frame cap. The HF tick runs once per presented frame and its rate
-# is set to the measured frame rate; LF is always half of HF, the 2:1 ratio the
-# game expects. Every frame then shows exactly one new tick, so motion and text
-# are smooth at Unlimited. Above dynamic_tick_rate_max_hz it ticks every 2nd
-# (3rd, ...) frame instead, which stays even. Under 30 fps the game's own
-# 30/15 Hz timer runs, as in the original. Overrides high_tick_rate and
-# higher_hf_tick_rate (both are ignored while this is on). The log shows
-# changes as "[tick-rate]".
-# false = fixed rates (original, or the two settings above).
-# Default: false
-dynamic_tick_rate = false
-
-# Highest HF tick rate dynamic_tick_rate may run (LF is half of it), 60..240.
-# Above it the game ticks every Nth frame. Rates above 60/30 Hz are beyond what
-# the fixed settings use; lower this if cloth or anything else misbehaves at
-# high frame rates. See docs/patches.md.
-# Default: 144
-dynamic_tick_rate_max_hz = 144
-
 # Interpolation (modern-engine smoothing): text and cloth follow the frame rate
-# instead of the game's slower LF tick. Subtitles and HUD text update on every
-# HF tick (their timers already use real time, so speed is unchanged), and the
-# bodies that push cloth around are blended between the last two animation
-# poses at the moment being drawn, the way the game already draws characters.
-# Works with or without dynamic_tick_rate. The log shows "[interpolation]".
+# instead of the game's slower LF tick (15 Hz in the original). Subtitles and
+# HUD text update on every HF tick, which is every frame (their timers already
+# use real time, so speed is unchanged), and the bodies that push cloth around
+# are blended between the last two animation poses at the moment being drawn,
+# the way the game already draws characters. The log shows "[interpolation]".
+# false = text and cloth colliders update on LF ticks only (original).
 # Default: false
 interpolation = false
 

@@ -1,8 +1,7 @@
-// fable2_tick_rate - dynamic tick rate ([patches] dynamic_tick_rate).
+// fable2_tick_rate - dynamic tick rate (always on).
 //
 // The game runs two fixed-step ticks: HF (30 Hz originally) and LF (15 Hz),
-// with HF at exactly twice LF. high_tick_rate / higher_hf_tick_rate double
-// them once at load. dynamic_tick_rate instead locks the HF tick to the
+// with HF at exactly twice LF. The dynamic tick rate locks the HF tick to the
 // presented frames, with no frame cap:
 //   - the render thread counts presented frames (OnRenderFrame) and keeps a
 //     smoothed frame rate (the "plan");
@@ -14,9 +13,10 @@
 //   - the render thread's "draw one LF period in the past" delay uses the
 //     smoothed rate (fable2_hook_render_time_lf), so it does not jump frame
 //     to frame.
-// Above dynamic_tick_rate_max_hz the loop ticks every Nth frame (N =
+// Above kMaxHfHz the loop ticks every Nth frame (N =
 // ceil(fps / max)), which keeps an even cadence. Below 30 fps the game's own
-// 30/15 Hz timer runs, as in the original. See docs/patches.md,
+// 30/15 Hz timer runs, as in the original, so a 30 fps frame limit plays
+// exactly like the original game. See docs/patches.md,
 // "Dynamic tick rate".
 
 #pragma once
@@ -35,11 +35,8 @@ inline constexpr uint32_t kHfRateAddr = 0x83319518;  // HF tick rate (30.0)
 // kept in sync whenever the rate changes.
 inline constexpr uint32_t kHfRateCopyAddr = 0x83497420;
 
-// [patches] dynamic_tick_rate from fable2_config.toml.
-bool Enabled();
-
-// [patches] dynamic_tick_rate_max_hz, clamped to 60..240.
-int MaxHfHz();
+// Highest HF rate; above it the loop ticks every Nth frame.
+inline constexpr double kMaxHfHz = 144.0;
 
 // Render thread, once per presented frame (MainRenderLoop_82B9CD68).
 void OnRenderFrame();

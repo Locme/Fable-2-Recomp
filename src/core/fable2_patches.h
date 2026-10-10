@@ -14,8 +14,8 @@
 // DO take effect, because the recompiled code reads/writes guest memory.
 //
 // There is no separate patch file: each patch is switched on by a [patches]
-// key in fable2_config.toml (high_tick_rate, higher_hf_tick_rate), read via
-// fable2::config::Get(). Patches() builds the table from those switches.
+// key in fable2_config.toml, read via fable2::config::Get(). Patches()
+// builds the table from those switches (none at the moment).
 
 #pragma once
 

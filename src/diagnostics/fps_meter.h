@@ -24,7 +24,7 @@
 
 #include "fable2_func_trace.h"
 #include "fable2_f5_lua.h"  // F5 external-Lua run (polled per frame)
-#include "fable2_tick_rate.h"  // dynamic_tick_rate frame counter
+#include "fable2_tick_rate.h"  // dynamic tick rate frame counter
 
 namespace fable2::functrace_window {
 
@@ -143,7 +143,7 @@ extern "C" void MainRenderLoop_82B9CD68(PPCContext& ctx, uint8_t* base) {
       }
     }
   }
-  // dynamic_tick_rate: count the frame (no-op when the option is off).
+  // Dynamic tick rate: count the frame.
   fable2::tickrate::OnRenderFrame();
   // F5 (host) -> run the external Lua file (per-frame, responsive).
   fable2::f5lua::poll_mainloop(ctx, base);
