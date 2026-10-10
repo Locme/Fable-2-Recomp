@@ -217,12 +217,18 @@ public sealed class DiscExtraction : IDisposable
     }
 
     /// <summary>
-    /// Writes default.xex to <paramref name="outDir"/> and returns its SHA-256 as
-    /// lower-case hex. Throws if the disc has no root-level default.xex. When
-    /// <paramref name="progress"/> is given, the extraction feeds it per-chunk.
+    /// Writes the disc's root-level default.xex to <paramref name="outDir"/> and
+    /// returns its SHA-256 as lower-case hex. Throws if the disc has no root-level
+    /// default.xex. When <paramref name="progress"/> is given, the extraction feeds
+    /// it per-chunk.
     /// </summary>
+    /// <param name="xexFileName">
+    /// The file name to write the XEX under (default <c>default.xex</c>). Passing a
+    /// different name (e.g. <c>default_new.xex</c>) lets a caller hash-gate the XEX
+    /// without clobbering an existing default.xex in the output folder.
+    /// </param>
     public string ExtractXex(string outDir, Action<string>? status = null,
-        ExtractionProgress? progress = null)
+        ExtractionProgress? progress = null, string xexFileName = "default.xex")
     {
         GdfxEntry entry = DefaultXex
             ?? throw new InvalidDataException("No default.xex found at the root of this ISO.");
@@ -230,7 +236,7 @@ public sealed class DiscExtraction : IDisposable
         status?.Invoke($"Extracting default.xex ({FormatSize(entry.Size)})…");
         progress?.SetPhase("Extracting default.xex");
         using IncrementalHash sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        _disc.WriteFile(entry, Path.Combine(outDir, "default.xex"),
+        _disc.WriteFile(entry, Path.Combine(outDir, xexFileName),
             onBytes: (b, off, cnt) => sha.AppendData(b, off, cnt),
             onChunk: (written, total) => progress?.OnFileChunk("default.xex", written, total));
         progress?.OnFileCompleted("default.xex", entry.Size);

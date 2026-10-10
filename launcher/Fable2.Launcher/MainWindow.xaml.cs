@@ -202,6 +202,9 @@ public partial class MainWindow : Window
             Process.Start(startInfo);
             StatusText.Text = "Fable II launched.";
             ConfigStateText.Text = "Game running";
+            // The game is a separate process, so the launcher can close itself
+            // now that it has started. Only close on a successful launch.
+            Close();
         }
         catch (Exception exception)
         {
@@ -374,7 +377,12 @@ public partial class MainWindow : Window
                     ResetExtractionUi(progress);
                 });
 
-                string hash = disc.ExtractXex(outDir, _ => { }, progress);
+                // Extract the XEX under a temporary name so that a failed hash
+                // check (or a user declining to extract) never clobbers an
+                // existing default.xex already in the launcher folder.
+                const string xexNewName = "default_new.xex";
+                string xexNew = Path.Combine(outDir, xexNewName);
+                string hash = disc.ExtractXex(outDir, _ => { }, progress, xexNewName);
                 progress.SetPhase("Checking default.xex SHA-256…");
                 (bool ok, string message) = GameCompatibilityInspector.CheckHash(hash);
                 if (!ok)
@@ -392,12 +400,24 @@ public partial class MainWindow : Window
                         _hashDecision = null;
                     if (!extractAnyways)
                     {
-                        // Declined: don't leave a 21 MB XEX behind from a disc we
-                        // won't support.
-                        try { File.Delete(Path.Combine(outDir, "default.xex")); }
+                        // Declined: remove the temporary XEX, leaving any existing
+                        // default.xex in the launcher folder untouched.
+                        try { File.Delete(xexNew); }
                         catch { /* best effort */ }
                         throw new ExtractionCancelledException();
                     }
+                }
+
+                // Promote the temporary XEX to default.xex (overwriting any
+                // existing one) now that the extraction will continue.
+                try
+                {
+                    File.Move(xexNew, Path.Combine(outDir, "default.xex"), overwrite: true);
+                }
+                catch (Exception moveEx)
+                {
+                    throw new InvalidDataException(
+                        "Could not place default.xex: " + moveEx.Message);
                 }
 
                 (files, bytes) = disc.ExtractRemaining(outDir, _ => { }, progress);
