@@ -125,7 +125,12 @@ inline ControllerView ReadController() {
   const uint32_t c = controller().load(std::memory_order_relaxed);
   if (c == 0) return v;
   const uint8_t* p = reinterpret_cast<const uint8_t*>(kGuestBase + c);
-  if (!Readable(p) || !Readable(p + kOffCanPressA)) return v;
+  if (!Readable(p) || !Readable(p + kOffCanPressA)) {
+    static std::atomic<bool> logged{false};
+    if (!logged.exchange(true))
+      REXSYS_WARN("[quick-boot] cannot read the front-end controller at 0x{:08X}", c);
+    return v;
+  }
   const volatile uint8_t* vp = p;
   v.state = static_cast<int32_t>((uint32_t(vp[kOffState]) << 24) |
                                  (uint32_t(vp[kOffState + 1]) << 16) |
@@ -188,18 +193,41 @@ inline void Run(int menu_delay_ms) {
                                                                  stage_start)
         .count();
   };
+  // The press counts as taken once the game clears the flag, starts loading,
+  // or moves the controller out of the title states (0 idle, 8 movie,
+  // 9 not ready, 12). A tester's log showed the flag can stay set after the
+  // game moved on, so the flag alone is not enough to stop pressing.
+  auto title_state = [](int32_t s) {
+    return s == kStateIdle || s == kStateMovie || s == kStateNotReady || s == 12;
+  };
+  constexpr int kMaxTitlePresses = 10;
   int a_presses = 0;
+  int32_t title_last_state = -2;
   for (;;) {
     const ControllerView v = ReadController();
-    if (v.ok && !v.can_press_a && v.state != kStateNotReady && a_presses > 0) break;
-    if (stage_ms() > kStageTimeoutMs) {
-      REXSYS_WARN("[quick-boot] stopped: the title did not take A (state={}, flag={})",
-                  v.state, v.can_press_a);
+    if (v.ok && v.state != title_last_state) {
+      REXSYS_INFO("[quick-boot] title: front-end state {} ({}), can_press_a={}, loading={}",
+                  v.state, StateName(v.state), v.can_press_a, v.loading);
+      title_last_state = v.state;
+    }
+    if (v.ok && v.loading) {
+      REXSYS_INFO("[quick-boot] done: a game started loading after {} A press(es)",
+                  a_presses);
       return;
     }
-    if (v.ok && v.can_press_a) {
-      Press(kButtonA, 120, 880);
+    if (v.ok && a_presses > 0 && (!v.can_press_a || !title_state(v.state))) break;
+    if (a_presses >= kMaxTitlePresses || stage_ms() > kStageTimeoutMs) {
+      REXSYS_WARN(
+          "[quick-boot] stopped: the title did not take A after {} press(es) "
+          "(state={}, can_press_a={})",
+          a_presses, v.state, v.can_press_a);
+      return;
+    }
+    if (v.ok && v.can_press_a && title_state(v.state) && v.state != kStateNotReady) {
       ++a_presses;
+      REXSYS_INFO("[quick-boot] pressing A on the title (press {}, state={})", a_presses,
+                  v.state);
+      Press(kButtonA, 120, 880);
     } else {
       SleepMs(50);
     }
