@@ -15,6 +15,7 @@
 #include <rex/logging/macros.h>
 
 #include "fable2_config.h"
+#include "quick_boot.h"
 
 // ---------------------------------------------------------------------------
 // Guild chest unlock (fable2.com website items + Collectors Edition content).
@@ -189,4 +190,13 @@ void fable2_hook_realtime_texture_morphing(PPCRegister& r9) {
     REXSYS_INFO("[texture-morph] building hero/dog textures in realtime (GPU) mode");
   }
   r9.u64 = 1;
+}
+
+// Quick boot (src/input/quick_boot.h). Runs right after `stb r11, 72(r31)` at
+// 0x826C60D8 in sub_826C60C0, the front-end controller's CAN_PRESS_A handler,
+// which has just set controller+72 = 1 ("Press A" will be accepted). Only
+// records the controller pointer; registers are left untouched. Does nothing
+// unless [patches] quick_boot is on.
+void fable2_hook_quick_boot_can_press_a(PPCRegister& r31) {
+  fable2::quickboot::OnCanPressA(r31.u32);
 }

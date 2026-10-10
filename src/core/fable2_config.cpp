@@ -12,6 +12,7 @@
 
 #include "fable2_config.h"
 
+#include <algorithm>
 #include <array>
 #include <format>
 #include <fstream>
@@ -148,6 +149,21 @@ realtime_texture_morphing = true
 # Default: false
 hero_dog_texture_readback = false
 
+# Quick boot (mid-asm hook fable2_hook_quick_boot_can_press_a, see
+# src/input/quick_boot.h): presses A on the "Press A" title screen as soon as
+# the game will take it, then picks Continue on the main menu, so the game
+# boots straight into your last save. The presses come from a built-in
+# virtual pad and wait for the game's own front-end state. It runs once per
+# launch, and stops (leaving the menu to you) if the attract movie starts or
+# a game is already loading. false = normal boot.
+# Default: false
+quick_boot = false
+
+# How long (ms) the main menu must sit idle before quick boot picks Continue.
+# Raise it if the Continue press lands before the menu is ready (0..30000).
+# Default: 3000
+quick_boot_menu_delay_ms = 3000
+
 [perf]
 # NtYieldExecution batching for the hot-function overrides (see
 # src/core/hotfunc/hotfunc_yield.h): every Nth guest yield does the real
@@ -273,6 +289,13 @@ bool Load(const std::filesystem::path& path) {
     values.hero_dog_texture_readback =
         Read<bool>(patches_table, "patches", "hero_dog_texture_readback", "boolean",
                    values.hero_dog_texture_readback);
+    values.quick_boot = Read<bool>(patches_table, "patches", "quick_boot",
+                                   "boolean", values.quick_boot);
+    values.quick_boot_menu_delay_ms = std::clamp(
+        static_cast<int32_t>(Read<int64_t>(patches_table, "patches",
+                                           "quick_boot_menu_delay_ms", "integer",
+                                           values.quick_boot_menu_delay_ms)),
+        0, 30000);
   }
   const toml::path perf_path{"perf"};
   const auto perf = root[perf_path];

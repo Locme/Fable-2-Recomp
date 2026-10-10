@@ -36,6 +36,7 @@
 // Re-enable to re-measure the frame pacing:
 // #include "fps_probe.h"
 #include "keyboard_gamepad.h"
+#include "quick_boot.h"
 #ifdef FABLE2_REMOTE_CONTROL
 #include "remote_control_server.h"
 #include "remote_gamepad_driver.h"
@@ -125,6 +126,15 @@ class Fable2App : public rex::ReXApp {
       auto system = rex::input::CreateDefaultInputSystem(tool_mode);
       system->AddDriver(
           std::make_unique<fable2::KeyboardGamepadDriver>(system->window(), 0));
+      // Quick boot pad: presses A at the title and Continue on the main menu
+      // ([patches] quick_boot, src/input/quick_boot.h). Only registered when
+      // the option is on, so a normal boot has no extra device. The config is
+      // loaded in OnPostInitLogging, before the input system is created.
+      if (!tool_mode && fable2::config::Get().quick_boot) {
+        system->AddDriver(std::make_unique<fable2::quickboot::GamepadDriver>(
+            system->window(), 0));
+        fable2::quickboot::Start(fable2::config::Get().quick_boot_menu_delay_ms);
+      }
 #ifdef FABLE2_REMOTE_CONTROL
       // Remote (AI) pad: driven over localhost TCP by an external harness
       // (src/input/remote_control_server.h). OR-merges with the pads above; not
