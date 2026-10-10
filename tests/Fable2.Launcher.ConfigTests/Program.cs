@@ -285,6 +285,54 @@ try
         GameCompatibilityInspector.Classify(malformedProbe.Hash, p => HasFile(malformedProbe, p), p => HasDirectory(malformedProbe, p))), "malformed descriptor accepted");
     Console.WriteLine("Catalogue-driven allow/deny, marker, extra-locale and native-profile tests passed.");
 
+    // Fable2ConfigFile (the Advanced Options page config, fable2_config.toml).
+    string advPath = Path.Combine(testDirectory, "fable2_config.toml");
+    var advanced = new Fable2ConfigValues
+    {
+        KeyboardGamepadMap = "LMB:X,RMB:Y,Shift:A,E:A",
+        MouseLook = true,
+        MouseLookScale = 512,
+        UnlockWebsite = true,
+        UnlockCe = false,
+        SkipIntroVideos = true,
+        DisableMotionBlur = true,
+        RealtimeTextureMorphing = true,
+        HeroDogTextureReadback = false,
+        DogFurDepthBias = true,
+        HotFuncYieldEvery = 4,
+    };
+    Fable2ConfigFile.Write(advPath, advanced);
+    string writtenAdv = File.ReadAllText(advPath);
+    Require(writtenAdv.Contains("config_version = 1"), "config_version was not written");
+    var readBack = Fable2ConfigFile.Read(advPath);
+    Require(readBack.MouseLook, "mouse look roundtrip failed");
+    Require(readBack.MouseLookScale == 512, "mouse scale roundtrip failed");
+    Require(!readBack.UnlockCe, "unlock_ce roundtrip failed");
+    Require(readBack.SkipIntroVideos, "skip_intro_videos roundtrip failed");
+    Require(readBack.DisableMotionBlur, "disable_motion_blur roundtrip failed");
+    Require(readBack.DogFurDepthBias, "dog_fur_depth_bias roundtrip failed");
+    Require(readBack.HotFuncYieldEvery == 4, "hotfunc_yield_every roundtrip failed");
+    Require(writtenAdv.Contains("[perf]"), "[perf] section was not written");
+    List<KeybindEntry> parsed = Fable2ConfigFile.ParseKeybinds(readBack.KeyboardGamepadMap);
+    Require(parsed.Count == 4, "keybind parse count failed");
+    Require(parsed[0].Key == "LMB" && parsed[0].Button == "X" && parsed[3].Key == "E" && parsed[3].Button == "A",
+        "keybind parse failed");
+    Require(string.Equals(Fable2ConfigFile.BuildKeybinds(Fable2ConfigFile.ParseKeybinds("LMB:X,E:A")), "LMB:X,E:A"),
+        "keybind build roundtrip failed");
+    Require(string.IsNullOrEmpty(Fable2ConfigFile.BuildKeybinds(Fable2ConfigFile.ParseKeybinds(""))),
+        "empty map should build to empty");
+    // Second write: update a value and preserve unknown sections/keys.
+    File.AppendAllText(advPath, "\n[custom_section]\nsome_key = \"keep me\"\n");
+    advanced.MouseLookScale = 1024;
+    Fable2ConfigFile.Write(advPath, advanced);
+    string advContent = File.ReadAllText(advPath);
+    Require(advContent.Contains("mouse_look_scale = 1024"), "mouse scale update failed");
+    Require(advContent.Contains("[custom_section]") && advContent.Contains("some_key = \"keep me\""),
+        "unknown section/keys not preserved");
+    Require(Fable2ConfigFile.Read(advPath).MouseLookScale == 1024, "mouse scale re-read failed");
+    Require(File.Exists(advPath + ".launcher-backup"), "fable2_config backup missing");
+    Console.WriteLine("Advanced options (fable2_config.toml) roundtrip and preservation passed.");
+
     if (args.Length > 0)
     {
         GameCompatibility compatibility = GameCompatibilityInspector.Inspect(args[0]);
