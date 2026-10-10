@@ -266,15 +266,6 @@ if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/fable2_config.toml")
          DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 endif()
 
-# Same treatment for the guest-image patch table (fable2_patches.toml, parsed
-# by src/core/fable2_patches.cpp): user data, copy-if-not-exists so edits survive
-# rebuilds; the code also recreates it if it is ever deleted (keep that
-# embedded copy in sync - see src/core/fable2_patches.cpp).
-if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/fable2_patches.toml")
-    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/config/fable2_patches.toml
-         DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-endif()
-
 # --- PDB for the Release build (crash debugging) --------------------------
 # The recompiled guest functions are named sub_<guest_address>, so a PDB lets
 # the debugger resolve a crash PC directly to the offending guest function

@@ -36,6 +36,9 @@ Original GOTY USA/Europe and German GOTY dumps are supported by the default
   - [x] Russia
   - [x] Spain
 
+[x] Custom Launcher
+  - [x] Built in ISO extractor
+
 ## Windows launcher
 
 The optional WPF launcher detects the original game edition and configures
@@ -43,22 +46,27 @@ output resolution, internal render scale, anisotropic filtering, FXAA, VSync,
 window/fullscreen mode and a 30/60/120/144/165/240/unlimited FPS limit. It keeps its preferences
 in `launcher-settings.toml` and writes `fable_2.toml`, preserving other settings
 and a one-time backup. Preferences survive the runtime rewriting its config.
-The game-folder selection starts empty and remembers only the user's saved
-location. Game files can live separately; the launcher uses `--game_data_root`.
-Both applications are named Fable 2 Recompiled and use new project-owned icons.
+It can also extract the game straight from a disc image: the **Extract from
+ISO** button opens a raw `.iso`, pulls out just `default.xex` first, checks its
+SHA-256 against the supported-version list, and only once it matches does it
+extract the rest of the disc (`default.xex` and `data/`) into the launcher's own
+folder, with a live progress screen and a Stop button. It reads Xbox 360 GDFX
+discs with the shared [X360Extract](tools/x360extract/) library, so its output
+matches the `x360extract` tool byte for byte — making the launcher the simplest
+way to get the game files in place, with no separate extractor tool.
 
-Build with the .NET 8 SDK using `build.cmd launcher`, or
-`build.cmd launcher-self-contained` to bundle the desktop runtime. Place
-`out\tests\launcher-build\Fable2Launcher.exe` beside `fable_2.exe` and its generated
-`fable2_build.json`. See [launcher details](launcher/README.md).
-For the source-built audio fallback, working FPS limit and matched renderer,
-use `build.cmd -release fable_2`; see [build instructions, tests and known
-limits](docs/RUNTIME_FIXES.md). Remaster assets and save editing are not included.
+The game-folder selection defaults to the launcher's own folder on first launch
+and then remembers the user's saved location. Game files can live separately;
+the launcher uses `--game_data_root`. Both applications are named Fable 2
+Recompiled and use new project-owned icons.
+
+
 
 
 
 # Notes for running the game
-- **How to extract:** rip the disc to an ISO, then open it with **[XboxImageExtractor](https://github.com/dromex1/XboxImageExtractor)** — a GUI tool for Xbox 360 game images. It lists the image's filesystem; select `default.xex` and `data` and extract them into the project root (`data` extract as folders).
+- **How to extract (built-in, recommended):** the launcher has an **Extract from ISO** button. Click **Extract from ISO** and pick your disc image (`.iso`). It first checks the iso against the supported-version list, and only once that matches does it extract disc (`default.xex` and `data/`) into the launcher's own folder. No separate tool is required.
+- **How to extract (external GUI tool):** alternatively, rip the disc to an ISO and open it with **[XboxImageExtractor](https://github.com/dromex1/XboxImageExtractor)** — a GUI tool for Xbox 360 game images. It lists the image's filesystem; select `default.xex` and `data` and extract them into the project root (`data` extract as folders).
 - **You must supply the game content yourself** (it is not in the repo): rip the Fable 2 GOTY (USA/EU) disc (the one with SHA-256 above) and put `default.xex` and `data/` in the project root. The build does not copy this into the build directories   
 - **Saves live in `<build dir>\saves\`** — back that folder up to keep your progress, and copy it between build trees (Debug/Release) or machines to carry a save over.
 - The `--game_data_root <path>` override still points the content root at a different tree (e.g. to run from a shared content copy without staging); saves/cache still land next to the exe.
@@ -69,7 +77,7 @@ limits](docs/RUNTIME_FIXES.md). Remaster assets and save editing are not include
 
 To run the game you must:
 1) Extract a downloaded copy release of the game 
-2) Extract the "data" and "default.xex" from your copy of the game, See "How to extract" for more info on that
+2) Extract the "data" and "default.xex" from your copy of the game — easiest with the launcher's **Extract from ISO** button, or an external GUI tool (see "How to extract")
 3) Run the fable.exe program and if no errors pop up then the game should launch and you are good to go
   - If an error pops up about the hash being wrong try to extract a different version of the game and then try again.
 
@@ -82,6 +90,7 @@ Optional command-line overrides (all normal `--cvar value` args):
 | `--update_data_root <path>` | Optional update content root |
 | `--window_width` / `--window_height` / `--fullscreen` | Presentation options |
 | `--keyboard_gamepad_map <map>` | Host keyboard -> guest gamepad button map (see below) |
+| `--skipHash` | Skip the `default.xex` SHA-256 integrity check. The hash is still written to the log, but a mismatch no longer blocks launch (useful for a modified or non-catalogue XEX) |
 
 ## User config (fable2_config.toml)
 
@@ -107,9 +116,10 @@ game recreates it with defaults on launch if it is ever missing. Loaded in
 - The `[patches]` section holds runtime toggles for the recomp-level
   (mid-asm hook) patches, consulted by the hook bodies on every call
   (`src/core/fable2_hooks.cpp`) — flip one and relaunch to A/B a patch with no
-  rebuild. Currently: `fps_60` (60 FPS hook; `true` = main loop ~60/s,
-  `false` = original 30/s). Guest-image data patches are a different file:
-  `fable2_patches.toml` (see above).
+  rebuild. This includes `high_tick_rate` and `higher_hf_tick_rate` (Xenia
+  "High Tick Rate" / "Higher HF Tick Rate"; turn both on together), which
+  also drive the guest-image data writes below. There is no separate patch
+  file.
 
 
 
@@ -211,19 +221,16 @@ string-build + `RunScript` call in `src/core/fable2_f5_lua.h`.\
 
 # Notes for dev who want to work on the build:
 
-## Guest-image patches (fable2_patches.toml)
+## Guest-image patches
 
 Data patches for the loaded `default.xex` guest image (Xenia game-patches
-format), applied before the guest module launches: `Fable2App::OnPostLoadXexImage()`
-→ `fable2::patches::Load()` + `ApplyAll()` (code in `src/core/fable2_patches.{h,cpp}`).
-Same lifecycle as the user config: staged by the build, recreated with the
-built-in defaults if missing, and a broken file falls back to the built-ins
-(dialog + log) so it never blocks launch. Each `[[patch]]` has an `enabled`
-toggle (default true) — flip it in the file and relaunch to A/B a patch with
-no rebuild. **Scope: data patches only** — code-region ops are inert in this
-recomp (guest `.text` is never executed); code patches are mid-asm hooks
-instead. Full details, the current patch list, and how code patches work:
-`docs/patches.md`.
+ops), applied before the guest module launches: `Fable2App::OnPostLoadXexImage()`
+→ `fable2::patches::ApplyAll()` (code in `src/core/fable2_patches.{h,cpp}`).
+There is no patch file: each patch is switched on by a `[patches]` key in
+`fable2_config.toml` (currently `high_tick_rate` and `higher_hf_tick_rate`).
+**Scope: data patches only** — code-region ops are inert in this recomp
+(guest `.text` is never executed); code patches are mid-asm hooks instead.
+Full details: `docs/patches.md`.
 
 ## Guest function-call tracing (fable2_func_trace.log)
 

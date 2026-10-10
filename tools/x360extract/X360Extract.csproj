@@ -9,7 +9,14 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Version>1.0.0</Version>
-    <Description>Extract default.xex and game content from Xbox 360 ISOs (GDFX + STFS)</Description>
+    <Description>CLI to extract default.xex and game content from Xbox 360 ISOs (GDFX + STFS)</Description>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The reusable engine lives in lib\ and is consumed as a project reference.
+         Exclude its sources so they are not compiled into the CLI a second time. -->
+    <Compile Remove="lib\**\*.cs" />
+    <ProjectReference Include="lib\X360Extract.Core.csproj" />
+  </ItemGroup>
 
 </Project>

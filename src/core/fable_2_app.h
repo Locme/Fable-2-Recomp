@@ -373,13 +373,9 @@ class Fable2App : public rex::ReXApp {
 #endif  // FABLE2_REMOTE_CONTROL
   // Apply the game patches (see src/core/fable2_patches.h) once the SDK has
   // decrypted default.xex into the guest arena, before the module launches.
-  // The patch table is data-driven: fable2_patches.toml next to the exe
-  // (created with built-in defaults on first launch; a broken file falls
-  // back to the built-ins, so a hand edit can never wedge the launch).
+  // Each patch is switched on by a [patches] key in fable2_config.toml
+  // (loaded earlier, in OnPostInitLogging).
   void OnPostLoadXexImage() override {
-    const std::filesystem::path exe_dir =
-        rex::filesystem::GetExecutableFolder();
-    fable2::patches::Load(exe_dir / "fable2_patches.toml");
     fable2::patches::ApplyAll(runtime()->memory(), PPCImageConfig);
     // Lets the address-scan hook (src/core/fable2_address_scan.cpp) read the
     // guest page tables.
@@ -415,6 +411,14 @@ class Fable2App : public rex::ReXApp {
     if (cache.empty()) cache = game_data_root() / "cache";
     const std::filesystem::path marker = cache / "default.xex.sha256";
 
+    // --skipHash (cvar, see main.cpp): compute and log the default.xex hash,
+    // but do not let a mismatch (or an unreadable file) block the launch.
+    const bool skip_hash = rex::cvar::GetFlagByName("skipHash") == "true";
+    if (skip_hash) {
+      REXSYS_INFO("[xex-verify] --skipHash is set: the default.xex hash will be "
+                  "logged but NOT enforced (a mismatch will not block the launch)");
+    }
+
     REXSYS_INFO("[xex-verify] {}", xex.string());
     REXSYS_INFO("[xex-verify] accepted SHA-256: {}", fable2::xexverify::kExpectedHashes);
     const auto r = fable2::xexverify::Check(xex, marker);
@@ -430,6 +434,12 @@ class Fable2App : public rex::ReXApp {
                     r.actual_hash, marker.string());
         break;
       case fable2::xexverify::Result::Mismatch: {
+        if (skip_hash) {
+          REXSYS_INFO("[xex-verify] actual SHA-256: {} (MISMATCH vs expected {}; "
+                      "not enforced because --skipHash is set)",
+                      r.actual_hash, fable2::xexverify::kExpectedHashes);
+          break;
+        }
         REXSYS_ERROR("[xex-verify] actual SHA-256: {}", r.actual_hash);
         REXSYS_ERROR("[xex-verify] expected SHA-256: {} (MISMATCH)",
                      fable2::xexverify::kExpectedHashes);
@@ -453,13 +463,22 @@ class Fable2App : public rex::ReXApp {
       }
       case fable2::xexverify::Result::ReadFailed:
       default:
+        if (skip_hash) {
+          REXSYS_WARN("[xex-verify] could not hash {} (not enforced because "
+                      "--skipHash is set)",
+                      xex.string());
+          break;
+        }
         REXSYS_ERROR("[xex-verify] could not hash {}; refusing to load unverified content", xex.string());
         rex::ShowSimpleMessageBox(rex::SimpleMessageBoxType::Error,
             "default.xex could not be read. Check the selected game folder and file permissions.");
         std::exit(1);
+        break;
     }
     const auto root = game_data_root();
-    if (!fable2::xexverify::HasCompatibleContent(root, r.actual_hash)) {
+    // The content-compatibility gate depends on the XEX hash identifying a
+    // known version, so it is also bypassed by --skipHash.
+    if (!skip_hash && !fable2::xexverify::HasCompatibleContent(root, r.actual_hash)) {
       REXSYS_ERROR("[build-profile] incomplete or mixed GOTY content: {}", root.string());
       rex::ShowSimpleMessageBox(rex::SimpleMessageBoxType::Error,
           "Incomplete or mixed GOTY content. Select an original matching GOTY dump; do not replace its XEX with another version.");

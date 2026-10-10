@@ -51,8 +51,7 @@ mouse_look_scale = 256
 
 [patches]
 # Toggles for the recomp-level (mid-asm hook) patches, consulted at runtime
-# by the hook bodies (src/core/fable2_hooks.cpp) - no rebuild needed. Guest-image
-# DATA patches are a different file: fable2_patches.toml next to the exe.
+# by the hook bodies (src/core/fable2_hooks.cpp) - no rebuild needed.
 # Unlock Website Items (mid-asm hooks fable2_hook_website_g1/g1b/grantnew;
 # Xenia "Unlock Website Items" by Guy): forces the website-registration gates
 # AND the grant-method result in the Guild-chest item getter so the website
@@ -73,15 +72,51 @@ unlock_ce = true
 # Default: false
 skip_intro_videos = false
 
+# High Tick Rate (Xenia patch by Guy, plus mid-asm hook
+# fable2_hook_high_tick_rate_skip_store): doubles the game's LF tick from
+# 15 Hz to 30 Hz. Vastly improves in-game UI framerate and input delay.
+# Use together with higher_hf_tick_rate. false = original 15 Hz.
+# Default: false
+high_tick_rate = false
+
+# Higher HF Tick Rate (Xenia patch by Ultra, plus mid-asm hook
+# fable2_hook_high_hf_tick_rate_skip_store): doubles the HF tick from 30 Hz to
+# 60 Hz. The game expects HF to run at twice LF; with high_tick_rate alone
+# both run at 30 Hz and cloth physics misbehaves. Turn this on whenever
+# high_tick_rate is on. Requires high_tick_rate: ignored when that is false.
+# false = original 30 Hz.
+# Default: false
+higher_hf_tick_rate = false
+
+# Disable Motion Blur (mid-asm hook fable2_hook_disable_motion_blur): the
+# camera's full-screen motion blur amount (what scripts set via Camera.SetBlur)
+# is zeroed on its way to the renderer each frame. The camera's own value is
+# untouched. The log shows "[motion-blur] game requested ..." the first time
+# the game asks for blur. false = blur as in the original game.
+# Default: false
+disable_motion_blur = false
+
+
+# Realtime Texture Morphing (mid-asm hook fable2_hook_realtime_texture_morphing):
+# the hero's and dog's morphed skin textures are rendered straight into their
+# final texture on the GPU (the game's own RealTimeTextureMorphing mode)
+# instead of being read back to the CPU and DXT-compressed. This fixes the
+# black hero/dog without hero_dog_texture_readback. The textures are stored
+# uncompressed, so they use a few MB more memory. See
+# plans/hero-dog-realtime-texture-morphing.md. false = original baked mode.
+# Default: true
+realtime_texture_morphing = true
 
 # Force a CPU readback of the render-to-texture resolve that regenerates the
 # hero/dog face+skin texture, so the character does not render black on a
 # split-memory host (see plans/hero-dog-texture-readback.md). Approach + the
 # guest base 0x12704000 come from just-harry's Unofficial Xenia femtofork for
 # Fable II. Seeds the SDK cvar readback_resolve_force_addresses; readback then
-# happens only for that resolve, not every frame. false = original black bug.
-# Default: true
-hero_dog_texture_readback = true
+# happens only for that resolve, not every frame. Superseded by
+# realtime_texture_morphing; only needed (and only effective) with that off.
+# false = original black bug.
+# Default: false
+hero_dog_texture_readback = false
 
 [perf]
 # NtYieldExecution batching for the hot-function overrides (see

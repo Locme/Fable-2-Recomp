@@ -100,6 +100,21 @@ address = 0x8256D9E4
 name = "fable2_hook_website_grantnew"
 registers = ["r3"]
 after_instruction = true
+
+# Disable Motion Blur. In the camera's per-frame update (sub_822A47C0, the
+# code that eases the camera's current values toward their targets), the
+# current full-screen motion blur amount (camera +0xD4; the value scripts set
+# through Camera.SetBlur / SetBlurCut / SetFullScreenMotionBlurCut) is handed
+# to the renderer: `lfs f12, 0xd4(r31)` at 0x822A49E8, then
+# `stfs f12, 0x7c(r11)`. Right after the load we zero f12 so the renderer
+# always receives 0; the camera's own value (and script reads of it) is
+# untouched. f12 is not read again before it is overwritten.
+# Toggle: [patches] disable_motion_blur.
+[[entrypoint.midasm_hook]]
+address = 0x822A49E8
+name = "fable2_hook_disable_motion_blur"
+registers = ["f12"]
+after_instruction = true
 #
 # CE: sub_824ACAE0 is the CE-chest grant vtable slot called from
 # GetCEContent. Its entire body is `lbz r3, 993(r3)` (returns the byte at
@@ -110,6 +125,29 @@ address = 0x824ACAE0
 name = "fable2_hook_ce_grantavail"
 registers = ["r3"]
 after_instruction = true
+
+# High Tick Rate (Xenia patch by Guy), code half. The Xenia patch NOPs the
+# store at 0x8233AEB4 that writes the tick-rate double at 0x83319510 every
+# time it runs, and patches that double (be8 0x83319511: 15.0 -> 30.0; written
+# at load by src/core/fable2_patches.cpp). Guest .text never runs here, so the NOP was inert and
+# the game overwrote the patched value. This hook runs BEFORE the store and,
+# while [patches] high_tick_rate is true, jumps past it (= the NOP).
+[[entrypoint.midasm_hook]]
+address = 0x8233AEB4
+name = "fable2_hook_high_tick_rate_skip_store"
+registers = []
+jump_address_on_true = 0x8233AEB8
+
+# Higher HF Tick Rate (Xenia patch by Ultra), code half. Same function: the
+# store at 0x8233AE98 (`stfd f0, -0x6ae8(r9)`) writes the HF tick double at
+# 0x83319518 (30.0, copied from 0x833194F0) every time it runs and would undo
+# the 30 -> 60 Hz data write (src/core/fable2_patches.cpp). Runs BEFORE the
+# store and, while [patches] higher_hf_tick_rate is true, jumps past it.
+[[entrypoint.midasm_hook]]
+address = 0x8233AE98
+name = "fable2_hook_high_hf_tick_rate_skip_store"
+registers = []
+jump_address_on_true = 0x8233AE9C
 
 # Address-space scan fix (src/core/fable2_address_scan.cpp). sub_82B4DDD8
 # finds an aligned block of address space by reserving one candidate address
@@ -138,6 +176,25 @@ jump_address_on_true = 0x82B4DEF8
 address = 0x822F49B8
 name = "fable2_hook_skip_intro_videos"
 registers = ["r3"]
+after_instruction = true
+
+# Hero/dog black textures, fixed without CPU readback
+# (plans/hero-dog-realtime-texture-morphing.md). The hero's and dog's skin
+# textures are built by texture morphing. In the default "baked" mode the morph
+# renderer (sub_82A69728) draws each mip into a scratch render target, resolves
+# it to guest memory (the 0x12704000 scratch texture), locks that READONLY on
+# the CPU and DXT-compresses it into the final texture (sub_83008E98). On a
+# split-memory host that CPU read sees stale memory, so the result is black.
+# The game also has a RealTimeTextureMorphing mode in which the morph is drawn
+# straight into an uncompressed final texture and its mips are made on the
+# GPU, so the CPU never reads the result. Every morph request becomes a morph
+# job in sub_82A76018, which copies the request's realtime byte with
+# `lbz r9, 0x20(r30)` at 0x82A7607C (then `stb r9, 0x60(r31)`); force it to 1.
+# Toggle: [patches] realtime_texture_morphing.
+[[entrypoint.midasm_hook]]
+address = 0x82A7607C
+name = "fable2_hook_realtime_texture_morphing"
+registers = ["r9"]
 after_instruction = true
 
 # Conservative settings: no register optimizations
@@ -49046,3 +49103,156 @@ name = "RegisterActionEffectTypeStrings_82514818"
 # Named for the mod-menu hook (see src/diagnostics/fable2_modmenu.h).
 [entrypoint.functions."0x82BE3F30"]
 name = "FrontMenu_InputEvent"
+
+# ===========================================================================
+# Camera system (per-frame camera update)
+#
+# The runtime "Camera" object is the C++ class CECCamera (registration block
+# at 0x820B28E4 in the guest image carries the class name and the full method
+# list: GetFOV/SetFOV/SetFOVCut, GetRoll/SetRoll/SetRollCut, GetBlur/SetBlur/
+# SetBlurCut, SetFullScreenMotionBlurCut, SetAngles/SetAnglesCut, MoveTo/
+# MoveToCut, AddCameraShake, SetDOF, ...). The per-frame step below eases the
+# camera's current values toward their targets and hands the result to the
+# renderer; the PDB only has __imp__ thunks (no real names), so these are
+# best-effort names from reading the recompiled code + the image's class data.
+# ===========================================================================
+
+# The camera's per-frame update. Args: camera (r3, the CECCamera object),
+# flag (r4 low byte, a computed clz bit, not a plain bool). Body is a textbook
+# eased-camera frame step, all "current -> target" pairs scaled by a per-frame
+# coefficient (camera +0xE4):
+#   - vector lerp  result = lerp(cam+0x60, cam+0x90, cam+0xE4), then
+#     sub_822CBDC8(result)  -- a transform/interface op on the lerped vector
+#   - CECCameraUpdateRoll_822A4A68 advances the rotation state (cam+0xA0..0xB8)
+#     each frame using the 0xE4 coefficient (see that entry below)
+#   - 11 dt-integrated scalar channels: current += (target - current)*0xE4
+#     for (24/28),(32/56),(36/60),(40/64),(44/68),(48/72),(52/76),(80/84),
+#     (196/200),(204/208),(212/216)  -- angles, position, zoom, DOF, blur
+#   - ease/snap split: a channel snaps straight to its target when 0xE4 >= 1.0
+#     (global constant at 0x820994C0, image value 1.0) else it eases -- the
+#     "...Cut" vs plain setter semantics
+#   - renderer hand-off (gated by the flag): copies the integrated values to
+#     the global app hub *(0x8221B620): 6+1 floats into a state object,
+#     vtable[5] update call, and 3 floats into the render object at
+#     0x74/0x78/0x7C (the 0x7C write IS the full-screen motion blur; the
+#     disable-motion-blur hook zeroes the lfs at 0x822A49E8 inside this fn)
+#   - frame ramp: decrements an integer frame counter (cam+0xDC) each call and
+#     recomputes 0xE4 = cam+0xE8 / (cam+0xE8 - remaining) -- a per-frame
+#     countdown for multi-frame camera moves (MoveTo(duration) style)
+# The counter-decrement + dt-integration on every call is the "per-frame" tell:
+# a frame-countdown ramp is only correct if this runs exactly once per frame
+# per camera. Named CECCameraUpdateFrame (not just Update/Lerp/Tween) because
+# it is the stateful per-frame step of the specific CECCamera class; see the
+# section header for the class-name evidence.
+[entrypoint.functions."0x822A47C0"]
+name = "CECCameraUpdateFrame_822A47C0"
+
+# Rotation/roll easing sub-step called by CECCameraUpdateFrame. Args: camera
+# (r3). Reads the 32-byte rotation state at cam+0xA0..0xB8 and advances it with
+# the same 1.0 threshold used for the scalar channels (global at 0x820994C0),
+# i.e. it eases the view roll/rotation toward its target each frame. Named
+# CECCameraUpdateRoll for the rotation channel it advances.
+[entrypoint.functions."0x822A4A68"]
+name = "CECCameraUpdateRoll_822A4A68"
+
+# Camera-controller update (one of two per-frame camera drivers). Args: r3 =
+# the controller. Computes the frame delta-time from GetTimebase_8221EB58
+# ((timebase - t0)/t1), resolves the active camera from the manager's object
+# array (entries are {tag, obj} pairs; tag >= 87 == camera; picked by an active
+# slot byte or a binary search for the last tag-87 entry), adds the dt to
+# cam+0xC0, and calls CECCameraUpdateFrame on up to two cameras (two call
+# sites: active + secondary/interesting). Named UpdateCamerasTimebase to reflect
+# that it derives the frame dt from the timebase clock before stepping the
+# cameras (its twin sub_824246F0 derives dt differently -- see
+# UpdateCamerasGlobalDt). PDB: __imp__sub_821B9320, 12234 bytes.
+[entrypoint.functions."0x821B9320"]
+name = "UpdateCamerasTimebase_821B9320"
+
+# Camera-controller update (the other of the two per-frame camera drivers). Same
+# shape as UpdateCamerasTimebase but sources the frame delta-time from the
+# global dt float at 0x820994B4 (image initial value 0.0) instead of
+# GetTimebase: it copies that dt into this+84/this+88, primes the camera's frame
+# ramp (stfs 0xE4; stb 0x5C; stw 0xDC/0xE8), then calls CECCameraUpdateFrame on
+# up to two cameras (tag-87 active + secondary selection). Named
+# UpdateCamerasGlobalDt for the dt source that distinguishes it from its twin.
+# PDB: __imp__sub_824246F0, 8869 bytes.
+[entrypoint.functions."0x824246F0"]
+name = "UpdateCamerasGlobalDt_824246F0"
+
+# =====================================================================
+# Texture morph system (per-appearance skin texture build: hero/dog age,
+# morality, scars, makeup)
+# =====================================================================
+#
+# The hero/dog skin is not a plain file texture: each frame of appearance change
+# rebuilds it. The pipeline (top -> down, verified from the recompiled call
+# graph):  TextureMorph_CreateJob  ->  [orchestrator sub_82A56CA0, called from
+# fable_2_recomp.284.cpp:2324]  ->  TextureMorph_SelectFormat  ->
+# [render driver sub_82A56428: retry-in-a-loop under a critical section]  ->
+# TextureMorph_Render, which for the Baked path calls TextureCompress_Quantized
+# and for the Realtime path calls TextureMips_BuildGPU. A per-request mode byte
+# (the "realtime" flag) is what selects the two paths. See
+# plans/hero-dog-realtime-texture-morphing.md.
+
+# Texture morph -- job creation (per-request dispatcher). For each request (r30)
+# it calls vtable[1]; when the result is 18 (the texture-morph request type) it
+# builds a job object (r31) carrying the source width/height (r30+8/+12) and a
+# data pointer (via sub_82A57AC8 on r30+16), and copies the per-request
+# "realtime mode" byte from request+0x20 into job+0x60 -- exactly at 0x82A7607C
+# (lbz r9,32(r30) / stb r9,96(r31)). That copy is the hook point the
+# force-realtime-texture-morphing patch targets. Named TextureMorph_CreateJob
+# for the morph job it constructs. PDB: __imp__sub_82A76018, 1815 bytes.
+[entrypoint.functions."0x82A76018"]
+name = "TextureMorph_CreateJob_82A76018"
+
+# Texture morph -- output format selection. Chosen by the orchestrator
+# (sub_82A56CA0) before rendering; it returns a byte that gates whether the
+# texture is rendered at all. The format-choice itself is at
+# 0x82A56088..0x82A560E4: cmpwi r31,40, then it derives the target D3D format id
+# from a source-format byte (obj+36) with bit-masks and adds 40/37/35 (the
+# A8R8G8B8 / X8R8G8B8 / DXT-family choices). The plan attributes an engine
+# format table at 0x8331D988 (stride 0x70) to this step; the 0x83310000 format
+# page is referenced by the renderer, but that exact offset/stride is not
+# visible in the recompiled form. Named TextureMorph_SelectFormat for the
+# output-format decision. PDB: __imp__sub_82A55EC0, 14768 bytes.
+[entrypoint.functions."0x82A55EC0"]
+name = "TextureMorph_SelectFormat_82A55EC0"
+
+# Texture morph -- the renderer (the large texture builder). A width x height
+# texel loop (blt back to loc_82A69D50) that sets D3D render state (the
+# 0x821fXXXX API family), calls GetTimebase_8221EB58 six times, and references
+# the engine format page (0x83310000). It draws the morph, then for the BAKED
+# path compresses the result on the CPU via TextureCompress_Quantized (bl at
+# 0x82A6A3F4) while for the REALTIME path builds the mip chain on the GPU via
+# TextureMips_BuildGPU (bl at 0x82A6A554, gated on mip count > 0). The mode is
+# threaded in as the 4th arg (stb 959(r1)); it ultimately comes from the job
+# built by TextureMorph_CreateJob. Named TextureMorph_Render for the texture
+# build it performs. PDB: __imp__sub_82A69728, 46456 bytes.
+[entrypoint.functions."0x82A69728"]
+name = "TextureMorph_Render_82A69728"
+
+# Texture morph -- CPU-side texture compressor (Baked path). Called by
+# TextureMorph_Render (bl at 0x82A6A3F4); it takes the resolved source pixels
+# and packs them into a compact block format on the CPU (a 4-iteration block
+# loop feeding sub_8300BDF8 -> sub_8300BB78). NOTE: the recompiled body shows a
+# quantized/palette-style encode -- many 3-6 bit field extracts and 3 indexed
+# table lookups, and NO 5-bit (0x1F) DXT color masks -- so the plan's
+# "D3DFMT_DXT1/DXT2_3/DXN" label is an inference, not something the code spells
+# out; the safe description is a CPU quantizing texture compressor. This is the
+# step that reads GPU-resolved memory back on the CPU, which is why the
+# split-memory host shows black when it is not hooked. Named
+# TextureCompress_Quantized for the CPU quantizing compression. PDB:
+# __imp__sub_83008E98, 18173 bytes.
+[entrypoint.functions."0x83008E98"]
+name = "TextureCompress_Quantized_83008E98"
+
+# Texture morph -- GPU mip-chain builder (Realtime path). Called by
+# TextureMorph_Render (bl at 0x82A6A554); it takes a texture object, reads the
+# D3D texture at +4, gets the level count from ((tex+44)>>26)&0xF, and loops
+# over levels halving width/height ((w+1)>>1) while managing an 8200-byte-stride
+# mip-surface array -- i.e. it (re)generates the mip levels on the GPU. This is
+# the path the realtime mode takes instead of the CPU compress, so no CPU
+# readback of GPU-resolved memory is needed. Named TextureMips_BuildGPU for the
+# GPU mip generation. PDB: __imp__sub_821FC4A0, 6505 bytes.
+[entrypoint.functions."0x821FC4A0"]
+name = "TextureMips_BuildGPU_821FC4A0"

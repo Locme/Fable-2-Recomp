@@ -1,6 +1,3 @@
-using System.Globalization;
-using System.Text;
-
 namespace X360Extract;
 
 public sealed class Options
@@ -125,254 +122,77 @@ Behavior:
     }
 
     // ------------------------------------------------------------------
-    //  GDFX header discovery
+    //  Progress formatting (delegates all disk work to the X360Extract library)
     // ------------------------------------------------------------------
 
-    private static readonly byte[] GdfxMagic = "MICROSOFT*XBOX*MEDIA"u8.ToArray();
-
-    /// <summary>
-    /// Scan the ISO for the GDFX header ("MICROSOFT*XBOX*MEDIA" magic).
-    /// Returns the offset of the header, or -1 if not found.
-    /// </summary>
-    private static long FindGdfxHeader(IsoImage iso, bool quiet)
+    private static void OnProgress(DiscProgress p, bool quiet)
     {
-        const int chunk = 1 << 26; // 64 MiB
-        byte[] buf = new byte[chunk];
-        long off = 0;
-        while (off < iso.Length)
+        if (quiet) return;
+        switch (p.Phase)
         {
-            int n = (int)Math.Min((long)chunk, iso.Length - off);
-            iso.Read(off, buf, 0, n);
-            var span = buf.AsSpan(0, n);
-            int i = span.IndexOf(GdfxMagic);
-            if (i >= 0)
-                return off + i;
-            off += n - GdfxMagic.Length; // overlap
-            if (!quiet)
-                Console.Write($"\r    scanning for GDFX header: {off / (1024 * 1024)} / {iso.Length / (1024 * 1024)} MiB   ");
+            case DiscProgressPhase.ScanningHeader:
+                Console.Write($"\r    scanning for GDFX header: {p.Current / (1024 * 1024)} / {p.Total / (1024 * 1024)} MiB   ");
+                break;
+            case DiscProgressPhase.EnteringDirectory:
+                Console.WriteLine($"  [dir]  {p.Name}/");
+                break;
+            case DiscProgressPhase.ExpandingStfs:
+                Console.WriteLine($"  [stfs] {p.Name}/  ({p.EntryCount} entries)");
+                break;
+            case DiscProgressPhase.WritingFile:
+                Console.Write($"  {p.Name}  ({p.SizeBytes:N0}) ... ");
+                break;
+            case DiscProgressPhase.FileWritten:
+                Console.WriteLine("ok");
+                break;
         }
-        if (!quiet) Console.WriteLine();
-        return -1;
     }
 
-    // ------------------------------------------------------------------
-    //  Listing
-    // ------------------------------------------------------------------
+    private static string MiB(long bytes) => $"{bytes / (1024 * 1024):N0}";
 
     private static int ListDisc(Options o)
     {
         if (!File.Exists(o.IsoPath))
             throw new OptionException($"ISO not found: {o.IsoPath}");
-        using var iso = new IsoImage(o.IsoPath);
 
         if (!o.Quiet)
-            Console.WriteLine($"Scanning {o.IsoPath} ({iso.Length / (1024 * 1024):N0} MiB) ...");
-        long hdrOff = FindGdfxHeader(iso, o.Quiet);
-        if (hdrOff < 0)
-            throw new InvalidDataException("GDFX header not found in ISO");
+            Console.WriteLine($"Scanning {o.IsoPath} ({MiB(new FileInfo(o.IsoPath).Length)} MiB) ...");
 
-        var gdfx = new GdfxFilesystem(iso, hdrOff);
+        using var disc = X360Disc.Open(o.IsoPath, p => OnProgress(p, o.Quiet));
         if (!o.Quiet)
         {
-            Console.WriteLine($"\nGDFX header at {hdrOff:X8}  (base {gdfx.BaseOffset:X8})");
-            Console.WriteLine($"Root sector: {gdfx.RootSector:X8}  size: {gdfx.RootSize}");
             Console.WriteLine();
+            Console.WriteLine($"GDFX header at {disc.HeaderOffset:X8}  (base {disc.Gdfx.BaseOffset:X8})");
+            Console.WriteLine($"Root sector: {disc.Gdfx.RootSector:X8}  size: {disc.Gdfx.RootSize}");
+            Console.WriteLine();
+            Console.Write(disc.ListTree());
         }
-
-        var root = gdfx.ReadDirectory(gdfx.RootSector, gdfx.RootSize);
-        PrintTree(gdfx, root, "", o);
         return 0;
     }
-
-    private static void PrintTree(GdfxFilesystem gdfx, List<GdfxEntry> entries, string prefix, Options o)
-    {
-        foreach (var e in entries)
-        {
-            string icon = e.IsDirectory ? "dir " : "file";
-            string sizeStr = e.IsDirectory ? "" : $"  ({e.Size:N0})";
-            Console.WriteLine($"  {prefix}{icon} {e.Name}{sizeStr}");
-
-            if (e.IsDirectory && e.Size > 0)
-            {
-                var sub = gdfx.ReadDirectory(e.Sector, e.Size);
-                PrintTree(gdfx, sub, prefix + "    ", o);
-            }
-        }
-    }
-
-    // ------------------------------------------------------------------
-    //  Extraction
-    // ------------------------------------------------------------------
 
     private static int Extract(Options o)
     {
         if (!File.Exists(o.IsoPath))
             throw new OptionException($"ISO not found: {o.IsoPath}");
-        Directory.CreateDirectory(o.OutDir);
-        using var iso = new IsoImage(o.IsoPath);
 
         if (!o.Quiet)
-            Console.WriteLine($"Scanning {o.IsoPath} ({iso.Length / (1024 * 1024):N0} MiB) ...");
-        long hdrOff = FindGdfxHeader(iso, o.Quiet);
-        if (hdrOff < 0)
-            throw new InvalidDataException("GDFX header not found in ISO");
+            Console.WriteLine($"Scanning {o.IsoPath} ({MiB(new FileInfo(o.IsoPath).Length)} MiB) ...");
 
-        var gdfx = new GdfxFilesystem(iso, hdrOff);
-        var root = gdfx.ReadDirectory(gdfx.RootSector, gdfx.RootSize);
-
-        // Filter root entries if --files was specified
-        List<GdfxEntry> toExtract;
-        if (o.Files.Count > 0)
-        {
-            toExtract = root.Where(e =>
-                o.Files.Any(f => string.Equals(f, e.Name, StringComparison.OrdinalIgnoreCase))
-            ).ToList();
-            if (toExtract.Count == 0)
-                throw new InvalidDataException($"None of the requested files found: {string.Join(", ", o.Files)}");
-        }
-        else
-        {
-            toExtract = root;
-        }
-
-        double startTs = Environment.TickCount64;
-        ulong totalBytes = 0;
-        int nFiles = 0;
-
-        foreach (var entry in toExtract)
-        {
-            if (entry.IsDirectory)
-            {
-                if (!o.Quiet)
-                    Console.WriteLine($"  [dir]  {entry.Name}/");
-                var sub = gdfx.ReadDirectory(entry.Sector, entry.Size);
-                ExtractDirectory(gdfx, sub, Path.Combine(o.OutDir, SanitizeName(entry.Name)), o, ref totalBytes, ref nFiles);
-            }
-            else
-            {
-                // STFS containers (e.g. nxeart) are copied raw by default - that
-                // matches how retail extraction tools present the GDFX tree.  With
-                // --unpack-stfs they are expanded into a directory of the same name.
-                if (o.UnpackStfs && StfsContainer.TryOpen(iso, gdfx.SectorToOffset(entry.Sector), out var container))
-                {
-                    string destDir = Path.Combine(o.OutDir, SanitizeName(entry.Name));
-                    if (!o.Quiet)
-                        Console.WriteLine($"  [stfs] {entry.Name}/  ({container.Entries.Count} entries)");
-                    ExtractStfs(container, destDir, o, ref totalBytes, ref nFiles);
-                }
-                else
-                {
-                    string path = Path.Combine(o.OutDir, SanitizeName(entry.Name));
-                    if (!o.Quiet)
-                        Console.Write($"  {entry.Name}  ({entry.Size:N0}) ... ");
-                    WriteFile(gdfx, entry, path, o);
-                    if (!o.Quiet)
-                        Console.WriteLine("ok");
-                    totalBytes += entry.Size;
-                    nFiles++;
-                }
-            }
-        }
-
-        double secs = (Environment.TickCount64 - startTs) / 1000.0;
+        using var disc = X360Disc.Open(o.IsoPath, p => OnProgress(p, o.Quiet));
         if (!o.Quiet)
-            Console.WriteLine($"Done: {nFiles} files, {totalBytes / (1024 * 1024):N0} MiB in {secs:F1}s -> {Path.GetFullPath(o.OutDir)}");
+            Console.WriteLine(); // terminate the "scanning for GDFX header" line
+
+        var options = new ExtractionOptions
+        {
+            Files = o.Files,
+            UnpackStfs = o.UnpackStfs,
+            Progress = p => OnProgress(p, o.Quiet),
+        };
+
+        ExtractionResult result = disc.Extract(o.OutDir, options);
+
+        if (!o.Quiet)
+            Console.WriteLine($"Done: {result.Files} files, {MiB(result.Bytes)} MiB in {result.Elapsed.TotalSeconds:F1}s -> {Path.GetFullPath(o.OutDir)}");
         return 0;
-    }
-
-    private static void ExtractDirectory(
-        GdfxFilesystem gdfx, List<GdfxEntry> entries, string destDir,
-        Options o, ref ulong totalBytes, ref int nFiles)
-    {
-        Directory.CreateDirectory(destDir);
-
-        foreach (var entry in entries)
-        {
-            if (entry.IsDirectory)
-            {
-                if (!o.Quiet)
-                    Console.WriteLine($"    [dir]  {entry.Name}/");
-                var sub = gdfx.ReadDirectory(entry.Sector, entry.Size);
-                ExtractDirectory(gdfx, sub, Path.Combine(destDir, SanitizeName(entry.Name)), o, ref totalBytes, ref nFiles);
-            }
-            else
-            {
-                // Nested files are always copied raw (e.g. $SystemUpdate/su20076000_00000000
-                // stays a PIRS blob). Only root-level entries are unpacked as STFS.
-                string path = Path.Combine(destDir, SanitizeName(entry.Name));
-                if (!o.Quiet)
-                    Console.Write($"    {entry.Name}  ({entry.Size:N0}) ... ");
-                WriteFile(gdfx, entry, path, o);
-                if (!o.Quiet)
-                    Console.WriteLine("ok");
-                totalBytes += entry.Size;
-                nFiles++;
-            }
-        }
-    }
-
-    private static void ExtractStfs(
-        StfsContainer container, string destDir,
-        Options o, ref ulong totalBytes, ref int nFiles)
-    {
-        Directory.CreateDirectory(destDir);
-
-        foreach (var e in container.Entries)
-        {
-            if (e.IsDirectory) continue;
-            string rel = container.GetPath(e);
-            string path = SafePath(Path.Combine(destDir, rel));
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-
-            if (!o.Quiet)
-                Console.Write($"      {rel}  ({e.FileSize:N0}) ... ");
-
-            using (var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read))
-            {
-                fs.SetLength((long)e.FileSize);
-                long pos = 0;
-                container.StreamFile(e, (b, off, cnt) =>
-                {
-                    fs.Write(b, off, cnt);
-                    pos += cnt;
-                });
-            }
-
-            if (!o.Quiet)
-                Console.WriteLine("ok");
-            totalBytes += e.FileSize;
-            nFiles++;
-        }
-    }
-
-    private static void WriteFile(GdfxFilesystem gdfx, GdfxEntry entry, string path, Options o)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
-        fs.SetLength(entry.Size);
-        gdfx.ReadFile(entry.Sector, entry.Size, (b, off, cnt) => fs.Write(b, off, cnt));
-    }
-
-    // ------------------------------------------------------------------
-    //  Helpers
-    // ------------------------------------------------------------------
-
-    private static string SanitizeName(string name)
-    {
-        char[] bad = Path.GetInvalidFileNameChars();
-        var sb = new StringBuilder(name.Length);
-        foreach (char ch in name)
-            sb.Append(Array.IndexOf(bad, ch) >= 0 ? '_' : ch);
-        string s = sb.ToString().Trim().TrimEnd('.');
-        return s.Length == 0 ? "_" : s;
-    }
-
-    private static string SafePath(string path)
-    {
-        path = path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
-        var full = Path.GetFullPath(path);
-        if (full.StartsWith("..", StringComparison.Ordinal) || full.Length == 0)
-            throw new InvalidDataException($"unsafe path: {path}");
-        return full;
     }
 }

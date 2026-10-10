@@ -44,8 +44,8 @@ struct Values {
   int32_t mouse_look_scale = 256;  // range 1..4096 (cvar constraint)
   // [patches] - toggles for the recomp-level (mid-asm hook) patches. The
   // hook bodies consult these at runtime (src/core/fable2_hooks.cpp), so a patch
-  // can be A/B'd with no rebuild. Guest-image data patches live in
-  // fable2_patches.toml instead (see src/core/fable2_patches.h).
+  // can be A/B'd with no rebuild. high_tick_rate / higher_hf_tick_rate also
+  // drive the guest-image data writes in src/core/fable2_patches.cpp.
   // Unlock the Guild-chest items that were obtainable from the (now-dead)
   // Fable 2 website. Forces both the registration gates and the grant-method
   // result in GuildChest_GetWebsiteItem_8256E368 (hooks
@@ -60,13 +60,33 @@ struct Values {
   // intro videos"; hook fable2_hook_skip_intro_videos in
   // src/core/fable2_hooks.cpp). false = original.
   bool skip_intro_videos = false;
+  // [patches] high_tick_rate: LF tick 15 -> 30 Hz (Xenia "High Tick Rate" by
+  // Guy; data write in src/core/fable2_patches.cpp + hook
+  // fable2_hook_high_tick_rate_skip_store). false = original.
+  bool high_tick_rate = false;
+  // [patches] higher_hf_tick_rate: HF tick 30 -> 60 Hz (Xenia "Higher HF Tick
+  // Rate" by Ultra; data write in src/core/fable2_patches.cpp + hook
+  // fable2_hook_high_hf_tick_rate_skip_store). Requires high_tick_rate.
+  bool higher_hf_tick_rate = false;
+  // [patches] disable_motion_blur: zero the full-screen motion blur amount the
+  // camera passes to the renderer (hook fable2_hook_disable_motion_blur in
+  // src/core/fable2_hooks.cpp). false = original.
+  bool disable_motion_blur = false;
+  // [patches] realtime_texture_morphing: build the hero/dog morphed skin
+  // textures on the GPU (the game's own RealTimeTextureMorphing mode) instead
+  // of CPU-compressing a resolved scratch texture, so they are not black on a
+  // split-memory host (hook fable2_hook_realtime_texture_morphing in
+  // src/core/fable2_hooks.cpp; plans/hero-dog-realtime-texture-morphing.md).
+  // Replaces hero_dog_texture_readback. false = original.
+  bool realtime_texture_morphing = true;
   // Force a CPU readback of the render-to-texture resolve that (re)generates
   // the hero/dog face+skin texture, so the character does not render black on
   // a split-memory host (see plans/hero-dog-texture-readback.md). Approach + the
   // guest base 0x12704000 come from just-harry's Unofficial Xenia femtofork for
   // Fable II. This seeds the SDK cvar readback_resolve_force_addresses in
   // Fable2App; readback then happens only for that resolve, not every frame.
-  bool hero_dog_texture_readback = true;
+  // Superseded by realtime_texture_morphing (only takes effect with that off).
+  bool hero_dog_texture_readback = false;
   // [perf] - hot-function override tuning.
   // hotfunc_yield_every: NtYieldExecution batching factor for the hotfunc
   // overrides (see src/core/hotfunc/hotfunc_yield.h). Every Nth call does

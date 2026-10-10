@@ -69,6 +69,16 @@ REXCVAR_DEFINE_STRING(
     "released (free cursor) and re-engaged when it closes. Empty = always lock "
     "while focused. This key is excluded from the gamepad map.");
 
+// Skip the default.xex SHA-256 integrity check at startup (see
+// Fable2App::OnLoadXexImage). When set, the XEX hash is still computed and
+// written to the log, but a mismatch (or an unreadable file) no longer blocks
+// the launch. Useful for running a modified or non-catalogue default.xex.
+REXCVAR_DEFINE_BOOL(skipHash, false, "Launch",
+                    "Skip the default.xex SHA-256 integrity check. The hash is "
+                    "still logged, but a mismatch no longer blocks the launch "
+                    "(useful for a modified or non-catalogue XEX). Pass "
+                    "--skipHash on the command line.");
+
 #ifdef _WIN32
 // Hybrid-graphics laptops (Intel/AMD iGPU + NVIDIA/AMD dGPU): ask the drivers
 // to run us on the discrete GPU. Without this Windows may hand the game the
