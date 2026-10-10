@@ -72,8 +72,8 @@ Working SDL devices continue using the existing audio path. This is a startup
 fallback, not hot-plug recovery or a general sound-quality fix.
 `StartWithoutAudio.cmd` forces an invalid SDL3 backend in the launched process
 only. It does not change Windows device settings. Start a fresh game/launcher
-process for this test, select the game folder if necessary, then load a save
-and exercise gameplay. Relaunch normally to test real sound output.
+process for this test, then load a save and exercise gameplay. Relaunch
+normally to test real sound output.
 
 `frame_limit` is a host swap limiter: 0 disables it, with SDK range 0–240.
 The launcher offers 30, 60, 120, 144, 165, 240 and unlimited. Fable waits for two guest vblanks;

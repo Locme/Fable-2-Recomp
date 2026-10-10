@@ -299,6 +299,9 @@ public partial class MainWindow : Window
 
     private bool _extracting;
     private volatile bool _stopRequested;
+    // Non-null while the "unrecognized XEX" prompt is on screen; the worker
+    // awaits its Task so the user can choose to extract anyways or stop.
+    private TaskCompletionSource<bool>? _hashDecision;
     private readonly Dictionary<string, CheckBox> _rootChecks = new(StringComparer.OrdinalIgnoreCase);
     private long _lastUiPush;
     private double _lastPushedPercent = -1;
@@ -340,8 +343,9 @@ public partial class MainWindow : Window
         ExtractionFileText.Text = "Scanning for the GDFX header…";
         ExtractionFolderList.Children.Clear();
         _rootChecks.Clear();
+        HashPrompt.Visibility = Visibility.Collapsed;
 
-        Task.Run(() =>
+        Task.Run(async () =>
         {
             string? error = null;
             int files = 0;
@@ -375,10 +379,25 @@ public partial class MainWindow : Window
                 (bool ok, string message) = GameCompatibilityInspector.CheckHash(hash);
                 if (!ok)
                 {
-                    // Don't leave a 21 MB XEX behind from a disc we won't support.
-                    try { File.Delete(Path.Combine(outDir, "default.xex")); }
-                    catch { /* best effort */ }
-                    throw new InvalidDataException(message);
+                    // The XEX is not a supported version. Instead of bailing out
+                    // with a message box, show the reason on the overlay and let
+                    // the user choose to extract the disc anyways (keeping the
+                    // XEX) or stop.
+                    var decision = new TaskCompletionSource<bool>(
+                        TaskCreationOptions.RunContinuationsAsynchronously);
+                    _hashDecision = decision;
+                    Dispatcher.Invoke(() => ShowHashPrompt(message));
+                    bool extractAnyways = await decision.Task;
+                    if (ReferenceEquals(_hashDecision, decision))
+                        _hashDecision = null;
+                    if (!extractAnyways)
+                    {
+                        // Declined: don't leave a 21 MB XEX behind from a disc we
+                        // won't support.
+                        try { File.Delete(Path.Combine(outDir, "default.xex")); }
+                        catch { /* best effort */ }
+                        throw new ExtractionCancelledException();
+                    }
                 }
 
                 (files, bytes) = disc.ExtractRemaining(outDir, _ => { }, progress);
@@ -432,9 +451,50 @@ public partial class MainWindow : Window
     private void StopClicked(object sender, RoutedEventArgs e)
     {
         if (!_extracting) return;
+        if (_hashDecision is not null)
+        {
+            DeclineHashDecision();
+            return;
+        }
         _stopRequested = true;
         StopButton.IsEnabled = false;
         ExtractionPhaseText.Text = "Stopping…";
+    }
+
+    // The large "Cancel" button on the "unrecognized XEX" prompt: declines the
+    // extraction (same as the top Stop button while the prompt is showing).
+    private void CancelClicked(object sender, RoutedEventArgs e)
+    {
+        DeclineHashDecision();
+    }
+
+    // Decline the "unrecognized XEX" prompt: the worker deletes the XEX and
+    // reports the extraction as stopped.
+    private void DeclineHashDecision()
+    {
+        if (_hashDecision is null) return;
+        _hashDecision.TrySetResult(false);
+        StopButton.IsEnabled = false;
+        HashPrompt.Visibility = Visibility.Collapsed;
+        ExtractionPhaseText.Text = "Stopping…";
+    }
+
+    private void ExtractAnywaysClicked(object sender, RoutedEventArgs e)
+    {
+        if (_hashDecision is null) return;
+        _hashDecision.TrySetResult(true);
+        HashPrompt.Visibility = Visibility.Collapsed;
+        ExtractionPhaseText.Text = "Extracting…";
+    }
+
+    // Show the "unrecognized XEX" prompt on the overlay (called on the UI
+    // thread via Dispatcher.Invoke from the worker).
+    private void ShowHashPrompt(string message)
+    {
+        HashPromptText.Text = message;
+        ExtractionPhaseText.Text = "Unrecognized default.xex";
+        StopButton.IsEnabled = true;   // the user can still abort
+        HashPrompt.Visibility = Visibility.Visible;
     }
 
     private void BuildFolderChecklist(List<RootItem> plan)

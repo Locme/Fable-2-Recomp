@@ -13,14 +13,16 @@ and extracts straight into the folder the launcher is running from (next to
 two phases:
 
 1. **`default.xex` only** — extracted and SHA-256-hashed first.
-2. **The remaining disc** (`data`, `nxeart`, `$SystemUpdate`, …) — written
-   only if the hash matches a known-good build in the version catalogue
+2. **The remaining disc** (`data`, `nxeart`, `$SystemUpdate`, …) — written if
+   the hash matches a known-good build in the version catalogue
    (`GameCompatibilityInspector.CheckHash`, same catalogue the launcher uses
-   to validate game folders).
+   to validate game folders). If the hash does **not** match, extraction pauses
+   on the progress screen with the reason and a red **Extract Anyways** button:
+   click it to keep the XEX and write the rest of the disc, or press **Stop**
+   to bail out (which deletes the ~21 MB XEX so nothing partial is left behind).
 
-An ISO the project does not support therefore costs one ~21 MB file, which is
-deleted on failure — the ~6.3 GB extraction never starts. On success the
-launcher's folder is automatically set as the selected game folder. The
+On success the launcher's folder is automatically set as the selected game
+folder. The
 GDFX/ISO 9660 readers come from the shared `X360Extract` library
 (`tools/x360extract/lib`, referenced as a project dependency), so the output is
 byte-for-byte identical to the standalone `x360extract` tool; STFS containers
@@ -63,10 +65,10 @@ Desktop Runtime on the target machine.
 Output is `out/tests/launcher-build/Fable2Launcher.exe`. Put it beside
 `fable_2.exe`, its matched DLLs, `fable2_build.json` and `app-icon.png`.
 
-A fresh launcher starts with no selected game folder. After choosing one,
-`launcher-game-path.txt` beside the launcher remembers that user's location.
-No developer path, global fallback or automatic dump selection is embedded.
-The directory must be writable to persist settings.
+The launcher defaults to its own folder on first launch and remembers the
+selected location in `launcher-game-path.txt` beside it. No developer path,
+global fallback or automatic dump selection is embedded. The directory must
+be writable to persist settings.
 
 `launcher-settings.toml` stores only the managed preferences. The launcher
 reads existing `fable_2.toml` first for legacy configurations, then overlays
