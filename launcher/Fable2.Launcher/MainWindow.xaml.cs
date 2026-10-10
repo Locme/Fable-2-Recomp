@@ -37,6 +37,8 @@ public partial class MainWindow : Window
                 FrameLimitCombo.Items.Add(new ComboBoxItem { Tag = option.Value, Content = option.Label });
         SelectByTag(FrameLimitCombo, "0");
         VsyncCheck.IsChecked = true;
+        DisableMotionBlurCheck.IsChecked = false;
+        SkipIntroVideosCheck.IsChecked = false;
     }
 
     private void DetectGameDirectory()
@@ -111,6 +113,12 @@ public partial class MainWindow : Window
             SelectByTag(DisplayModeCombo, !fullscreen ? "windowed" : exclusive ? "exclusive" : "borderless");
             VsyncCheck.IsChecked = ParseBool(GetValue("vsync", "true"), true);
 
+            Dictionary<string, string> patches = LauncherConfigFile.ReadSectionValues(
+                Path.Combine(_executableDirectory!, PatchSettings.ConfigFileName), PatchSettings.Section);
+            DisableMotionBlurCheck.IsChecked = ParseBool(
+                patches.GetValueOrDefault("disable_motion_blur", "false"), false);
+            SkipIntroVideosCheck.IsChecked = ParseBool(
+                patches.GetValueOrDefault("skip_intro_videos", "false"), false);
         }
         finally { _loading = false; }
         RefreshSummary();
@@ -167,6 +175,7 @@ public partial class MainWindow : Window
             LauncherConfigFile.WriteValues(path, settings, GraphicsSettings.ManagedKeys);
             LauncherConfigFile.WriteValues(Path.Combine(_executableDirectory,
                 "launcher-settings.toml"), settings, GraphicsSettings.ManagedKeys);
+            SavePatchSettings();
             _values.Clear();
             foreach ((string key, string value) in settings) _values[key] = value;
         }
@@ -180,6 +189,19 @@ public partial class MainWindow : Window
         StatusText.Text = $"Saved {Path.GetFileName(path)}.";
         ConfigStateText.Text = "Settings saved";
         return true;
+    }
+
+    private void SavePatchSettings()
+    {
+        bool disableMotionBlur = DisableMotionBlurCheck.IsChecked == true;
+        bool skipIntroVideos = SkipIntroVideosCheck.IsChecked == true;
+        string path = Path.Combine(_executableDirectory!, PatchSettings.ConfigFileName);
+        // The game writes the full, commented fable2_config.toml on its first
+        // run. Before that, only create the file when a toggle is turned on;
+        // the defaults already match the unchecked boxes.
+        if (!File.Exists(path) && !disableMotionBlur && !skipIntroVideos) return;
+        LauncherConfigFile.WriteSectionValues(path, PatchSettings.Section,
+            PatchSettings.Create(disableMotionBlur, skipIntroVideos), PatchSettings.ManagedKeys);
     }
 
     private void LaunchGame()
