@@ -241,11 +241,6 @@ uint32_t LoadU32(uint32_t addr) {
 
 float LoadF32(uint32_t addr) { return std::bit_cast<float>(LoadU32(addr)); }
 
-void StoreF32(uint32_t addr, float f) {
-  const uint32_t v = __builtin_bswap32(std::bit_cast<uint32_t>(f));
-  std::memcpy(GuestMem(addr), &v, 4);
-}
-
 }  // namespace
 
 // GUI every HF tick. sub_82278C90 (run on every HF tick from ProcessGameFrame)
@@ -272,7 +267,8 @@ bool fable2_hook_gui_every_tick() { return InterpolationEnabled(); }
 // so nothing overwrites it in between.
 void fable2_hook_cloth_collider_bone(PPCRegister& r1, PPCRegister& r11,
                                      PPCRegister& r30) {
-  if (!InterpolationEnabled() || fable2::patches::GuestBase() == nullptr) return;
+  if (!InterpolationEnabled()) return;
+  if (fable2::patches::GuestBase() == nullptr) return;
   const uint32_t inst = r30.u32;
   const uint32_t cur_pose = LoadU32(inst + 512);
   const uint32_t prev_pose = LoadU32(inst + 516);
@@ -286,26 +282,36 @@ void fable2_hook_cloth_collider_bone(PPCRegister& r1, PPCRegister& r11,
   const float alpha = LoadF32(interp + 16);
   if (!(alpha >= 0.0f && alpha < 1.0f)) return;  // 1 = current pose (or NaN)
 
+  // A bone is 12 contiguous big-endian floats; guest memory is mapped
+  // linearly, so each bone is read and written through one host pointer.
   const uint32_t cur = r11.u32;
-  const uint32_t prev = prev_bones + (cur - cur_bones);
+  const uint8_t* prev_p = GuestMem(prev_bones + (cur - cur_bones));
+  const uint8_t* cur_p = GuestMem(cur);
+  uint32_t raw_a[12], raw_b[12];
+  std::memcpy(raw_a, prev_p, sizeof(raw_a));
+  std::memcpy(raw_b, cur_p, sizeof(raw_b));
   float a[12], b[12];
   for (int i = 0; i < 12; ++i) {
-    a[i] = LoadF32(prev + 4 * i);
-    b[i] = LoadF32(cur + 4 * i);
+    a[i] = std::bit_cast<float>(__builtin_bswap32(raw_a[i]));
+    b[i] = std::bit_cast<float>(__builtin_bswap32(raw_b[i]));
   }
   const float dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
-  if (dot < 0.0f) {
-    for (int i = 0; i < 4; ++i) b[i] = -b[i];
-  }
+  const float sign = dot < 0.0f ? -1.0f : 1.0f;
   float out[12];
-  for (int i = 0; i < 12; ++i) out[i] = a[i] + (b[i] - a[i]) * alpha;
-  const float len =
-      std::sqrt(out[0] * out[0] + out[1] * out[1] + out[2] * out[2] + out[3] * out[3]);
-  if (len > 1e-6f) {
-    for (int i = 0; i < 4; ++i) out[i] /= len;
+  for (int i = 0; i < 4; ++i) out[i] = a[i] + (sign * b[i] - a[i]) * alpha;
+  for (int i = 4; i < 12; ++i) out[i] = a[i] + (b[i] - a[i]) * alpha;
+  const float len_sq =
+      out[0] * out[0] + out[1] * out[1] + out[2] * out[2] + out[3] * out[3];
+  if (len_sq > 1e-12f) {
+    const float inv_len = 1.0f / std::sqrt(len_sq);
+    for (int i = 0; i < 4; ++i) out[i] *= inv_len;
   }
   const uint32_t scratch = (r1.u32 - 256) & ~15u;
-  for (int i = 0; i < 12; ++i) StoreF32(scratch + 4 * i, out[i]);
+  uint32_t raw_out[12];
+  for (int i = 0; i < 12; ++i) {
+    raw_out[i] = __builtin_bswap32(std::bit_cast<uint32_t>(out[i]));
+  }
+  std::memcpy(GuestMem(scratch), raw_out, sizeof(raw_out));
   r11.u64 = scratch;
 }
 
