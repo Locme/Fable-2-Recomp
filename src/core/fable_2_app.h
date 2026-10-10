@@ -134,6 +134,8 @@ class Fable2App : public rex::ReXApp {
         system->AddDriver(std::make_unique<fable2::quickboot::GamepadDriver>(
             system->window(), 0));
         fable2::quickboot::Start(fable2::config::Get().quick_boot_menu_delay_ms);
+      } else if (!tool_mode) {
+        REXSYS_INFO("[quick-boot] off ([patches] quick_boot = false)");
       }
 #ifdef FABLE2_REMOTE_CONTROL
       // Remote (AI) pad: driven over localhost TCP by an external harness
