@@ -117,8 +117,8 @@ quick_boot = false
 
 # How long (ms) the main menu must sit idle before quick boot picks Continue.
 # Raise it if the Continue press lands before the menu is ready (0..30000).
-# Default: 3000
-quick_boot_menu_delay_ms = 3000
+# Default: 1000
+quick_boot_menu_delay_ms = 1000
 
 # High Tick Rate (Xenia patch by Guy, plus mid-asm hook
 # fable2_hook_high_tick_rate_skip_store): doubles the game's LF tick from

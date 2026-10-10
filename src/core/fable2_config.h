@@ -67,7 +67,7 @@ struct Values {
   bool quick_boot = false;
   // [patches] quick_boot_menu_delay_ms: how long the front end must sit idle on
   // the main menu before quick boot presses Up/Down/A (range 0..30000).
-  int32_t quick_boot_menu_delay_ms = 3000;
+  int32_t quick_boot_menu_delay_ms = 1000;
   // [patches] high_tick_rate: LF tick 15 -> 30 Hz (Xenia "High Tick Rate" by
   // Guy; data write in src/core/fable2_patches.cpp + hook
   // fable2_hook_high_tick_rate_skip_store). false = original.

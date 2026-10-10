@@ -72,6 +72,14 @@ rex::ui::Presenter* GetWindowPresenter(rex::ui::Window* w) {
 }
 }  // namespace
 
+// Quick boot: the startup screen's per-frame update (vtable slot 6 of
+// FrontEndStartupScreen). Skips the legal text and "Press A" when
+// [patches] quick_boot is on, then runs the recompiled original.
+extern "C" void ProcessAndProcessAndProcess1723_826C63D8(PPCContext& ctx, uint8_t* base) {
+  fable2::quickboot::OnStartupUpdate(ctx, base);
+  __imp__ProcessAndProcessAndProcess1723_826C63D8(ctx, base);
+}
+
 class Fable2App : public rex::ReXApp {
  public:
   using rex::ReXApp::ReXApp;

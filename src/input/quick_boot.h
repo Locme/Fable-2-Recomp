@@ -21,14 +21,18 @@
 //    (sub_826C67F8).
 //
 // So the sequence is:
-//   1. Title: while +72 == 1, pulse A (once a second) until the game clears it.
+//   1. Title: the first startup-screen update in state 9 (legal text) runs the
+//      game's END_LEGAL and CAN_PRESS_A handlers and its button handler with
+//      A (OnStartupUpdate, from the old skip_to_main_menu patch), so neither
+//      the legal text nor "Press A" waits. If that misses, the pad pulses A
+//      while +72 is set.
 //   2. Menu: wait until the controller is back in state 0, not loading, and has
 //      stayed there for quick_boot_menu_delay_ms (the menu fades in; the GUI
 //      menu itself has no state we can read yet, so this one wait is timed).
-//   3. Press Up 4 times (the menu clamps at the top, so this lands on New Game
-//      wherever the cursor started), Down once (Continue is the second item:
-//      New Game / Continue / Downloadable Content / Language / Subtitles, see
-//      plans/main-menu-mod-item.md), then A.
+//   3. Press Up twice (the menu clamps at the top, so this lands on New Game
+//      from either of the first two rows), Down once (Continue is the second
+//      item: New Game / Continue / Downloadable Content / Language / Subtitles,
+//      see plans/main-menu-mod-item.md), then A.
 // Every press re-checks the controller first; if the attract movie starts or a
 // load begins early, quick boot stops and leaves the game to the player. It
 // runs once per launch and gives up after a fixed time.
@@ -48,6 +52,8 @@
 #include <rex/input/input_driver.h>
 #include <rex/input/input_system.h>
 #include <rex/logging/macros.h>
+#include <rex/ppc/context.h>
+#include <rex/ppc/func.h>
 #include <rex/system/xmemory.h>
 
 #ifdef _WIN32
@@ -72,7 +78,14 @@ constexpr int32_t kStateIdle = 0;
 constexpr int32_t kStateMovie = 8;
 constexpr int32_t kStateNotReady = 9;
 
-// Guest arena base (fixed; see src/diagnostics/alloc_watch.h).
+// Startup-screen handlers (the same calls the old skip_to_main_menu patch
+// made): END_LEGAL moves 9 (legal text) -> 0, CAN_PRESS_A sets +72, and the
+// button handler with 0x24 (A) for pad 0 starts the "start" animation, after
+// which the game opens the main menu by itself.
+constexpr uint32_t kFnEndLegal = 0x826C6040;
+constexpr uint32_t kFnCanPressA = 0x826C60C0;
+constexpr uint32_t kFnOnButton = 0x826C61B8;
+constexpr uint32_t kGuestButtonA = 0x24;
 
 inline std::atomic<bool>& enabled() {
   static std::atomic<bool> e{false};
@@ -138,6 +151,47 @@ inline const uint8_t* GuestPtr(uint32_t guest_addr) {
   return mem->TranslateVirtual<const uint8_t*>(guest_addr);
 }
 
+// Called at the top of the startup screen's per-frame update (the override in
+// fable_2_app.h). The first time it sees the legal screen (state 9) it runs the
+// game's own END_LEGAL and CAN_PRESS_A handlers and presses A through the
+// game's button handler, so the legal text and "Press A" never wait.
+inline void OnStartupUpdate(PPCContext& ctx, uint8_t* base) {
+  if (!enabled().load(std::memory_order_relaxed)) return;
+  static std::atomic<bool> done{false};
+  if (done.load(std::memory_order_relaxed)) return;
+  const uint32_t self = ctx.r3.u32;
+  if (self == 0) return;
+  const uint8_t* p = base + self + kOffState;
+  const uint32_t state = (uint32_t(p[0]) << 24) | (uint32_t(p[1]) << 16) |
+                         (uint32_t(p[2]) << 8) | uint32_t(p[3]);
+  if (state != static_cast<uint32_t>(kStateNotReady)) return;
+  if (done.exchange(true)) return;
+
+  // The update takes r3 = this and f1 = frame time; keep them for the body.
+  // The guest calls follow the normal calling convention, so r1 and the
+  // non-volatile registers come back unchanged.
+  const PPCRegister saved_r3 = ctx.r3;
+  const PPCRegister saved_f1 = ctx.f1;
+  ctx.r3.u64 = self;
+  rex::runtime::ResolveIndirectFunction(kFnEndLegal)(ctx, base);
+  ctx.r3.u64 = self;
+  rex::runtime::ResolveIndirectFunction(kFnCanPressA)(ctx, base);
+  ctx.r3.u64 = self;
+  ctx.r4.u64 = kGuestButtonA;
+  ctx.r5.u64 = 0;
+  rex::runtime::ResolveIndirectFunction(kFnOnButton)(ctx, base);
+  ctx.r3 = saved_r3;
+  ctx.f1 = saved_f1;
+
+  uint32_t expected = 0;
+  controller().compare_exchange_strong(expected, self);
+  const uint32_t now = (uint32_t(p[0]) << 24) | (uint32_t(p[1]) << 16) |
+                       (uint32_t(p[2]) << 8) | uint32_t(p[3]);
+  REXSYS_INFO("[quick-boot] skipped the legal screen and pressed A on the title "
+              "(state now {})",
+              now);
+}
+
 struct ControllerView {
   bool ok = false;
   int32_t state = -1;
@@ -177,7 +231,7 @@ inline void SleepMs(int ms) {
 
 // Hold `mask` long enough for the game to see it (it polls the pad once per
 // frame, 30-60 Hz), then release and leave a gap before the next press.
-inline void Press(uint16_t mask, int hold_ms = 120, int gap_ms = 300) {
+inline void Press(uint16_t mask, int hold_ms = 100, int gap_ms = 200) {
   buttons().store(mask, std::memory_order_relaxed);
   SleepMs(hold_ms);
   buttons().store(0, std::memory_order_relaxed);
@@ -301,14 +355,17 @@ inline void Run(int menu_delay_ms) {
     SleepMs(50);
   }
 
-  // 3. Up x4 (clamps on New Game), Down (Continue), A. Re-check before each.
+  // 3. Up x2 (clamps on New Game), Down (Continue), A. Re-check before each.
   struct Step {
     uint16_t mask;
     const char* name;
   };
-  const Step steps[] = {{kButtonUp, "Up"},     {kButtonUp, "Up"},
-                        {kButtonUp, "Up"},     {kButtonUp, "Up"},
-                        {kButtonDown, "Down"}, {kButtonA, "A"}};
+  // The cursor opens on New Game or Continue; two Ups (the menu clamps at
+  // the top) put it on New Game either way.
+  const Step steps[] = {{kButtonUp, "Up"},
+                        {kButtonUp, "Up"},
+                        {kButtonDown, "Down"},
+                        {kButtonA, "A"}};
   for (const Step& s : steps) {
     const ControllerView v = ReadController();
     if (!v.ok || v.state != kStateIdle || v.loading) {
@@ -318,10 +375,10 @@ inline void Run(int menu_delay_ms) {
           s.name, v.state, StateName(v.state), v.loading);
       return;
     }
-    if (s.mask == kButtonA) SleepMs(300);  // let the Down settle
+    if (s.mask == kButtonA) SleepMs(150);  // let the Down settle
     Press(s.mask);
   }
-  REXSYS_INFO("[quick-boot] pressed Up x4, Down, A on the main menu (Continue)");
+  REXSYS_INFO("[quick-boot] pressed Up x2, Down, A on the main menu (Continue)");
 
   // 4. Report what the game did with it.
   stage_start = clock::now();
