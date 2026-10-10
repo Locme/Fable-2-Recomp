@@ -127,7 +127,8 @@ void fable2_hook_disable_motion_blur(PPCRegister& f12) {
 // original NOPs the slot-0 construction instead; the hook leaves all three
 // strings constructed and released normally. Runs once per boot.
 void fable2_hook_skip_intro_videos(PPCRegister& r3) {
-  if (fable2::config::Get().skip_intro_videos) {
+  // Quick boot skips them too: it exists to get into the game fast.
+  if (fable2::config::Get().skip_intro_videos || fable2::config::Get().quick_boot) {
     r3.u64 = 0;
   }
 }

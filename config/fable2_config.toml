@@ -78,7 +78,8 @@ skip_intro_videos = false
 # boots straight into your last save. The presses come from a built-in
 # virtual pad and wait for the game's own front-end state. It runs once per
 # launch, and stops (leaving the menu to you) if the attract movie starts or
-# a game is already loading. false = normal boot.
+# a game is already loading. Also skips the intro videos, like
+# skip_intro_videos = true. false = normal boot.
 # Default: false
 quick_boot = false
 

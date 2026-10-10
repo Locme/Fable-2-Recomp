@@ -244,6 +244,9 @@ inline void Run(int menu_delay_ms) {
                   a_presses);
       return;
     }
+    // 1 accepted, 10 waiting for profile, 11 loading profile: the title has
+    // taken A (from us or from a real pad), so go on to the menu.
+    if (v.ok && (v.state == 1 || v.state == 10 || v.state == 11)) break;
     if (v.ok && a_presses > 0 && (!v.can_press_a || !title_state(v.state))) break;
     if (a_presses >= kMaxTitlePresses || stage_ms() > kStageTimeoutMs) {
       REXSYS_WARN(
@@ -252,7 +255,10 @@ inline void Run(int menu_delay_ms) {
           a_presses, v.state, v.can_press_a);
       return;
     }
-    if (v.ok && v.can_press_a && title_state(v.state) && v.state != kStateNotReady) {
+    // The flag is the game's own "A will be accepted" signal. A tester's log
+    // showed it set while the state still reads 9, and A was taken then, so
+    // state 9 is not excluded.
+    if (v.ok && v.can_press_a && title_state(v.state)) {
       ++a_presses;
       REXSYS_INFO("[quick-boot] pressing A on the title (press {}, state={})", a_presses,
                   v.state);
