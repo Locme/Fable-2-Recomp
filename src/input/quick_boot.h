@@ -48,6 +48,8 @@
 #include <rex/input/input_driver.h>
 #include <rex/input/input_system.h>
 #include <rex/logging/macros.h>
+#include <rex/system/kernel_state.h>
+#include <rex/system/xmemory.h>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -72,7 +74,6 @@ constexpr int32_t kStateMovie = 8;
 constexpr int32_t kStateNotReady = 9;
 
 // Guest arena base (fixed; see src/diagnostics/alloc_watch.h).
-constexpr uintptr_t kGuestBase = 0x100000000ull;
 
 inline std::atomic<bool>& enabled() {
   static std::atomic<bool> e{false};
@@ -100,17 +101,31 @@ inline void OnCanPressA(uint32_t controller_addr) {
   }
 }
 
-inline bool Readable(const void* p) {
+// Only asks whether the page is committed. The guest heaps are mapped views
+// whose protection flags vary by build, so the game can read pages that a
+// strict protection check rejects.
+inline bool Readable(const void* p, unsigned long* out_state = nullptr,
+                     unsigned long* out_protect = nullptr) {
 #ifdef _WIN32
-  MEMORY_BASIC_INFORMATION m;
+  MEMORY_BASIC_INFORMATION m{};
   if (::VirtualQuery(p, &m, sizeof m) == 0) return false;
-  return m.State == MEM_COMMIT &&
-         (m.Protect & (PAGE_READWRITE | PAGE_READONLY | PAGE_WRITECOPY |
-                       PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE)) != 0;
+  if (out_state) *out_state = m.State;
+  if (out_protect) *out_protect = m.Protect;
+  return m.State == MEM_COMMIT;
 #else
   (void)p;
+  (void)out_state;
+  (void)out_protect;
   return true;
 #endif
+}
+
+// Host pointer for a guest address, using the runtime's own mapping (the
+// heap a guest address lives in can sit at an offset from the base).
+inline const uint8_t* GuestPtr(uint32_t guest_addr) {
+  auto* mem = rex::system::kernel_memory();
+  if (!mem) return nullptr;
+  return mem->TranslateVirtual<const uint8_t*>(guest_addr);
 }
 
 struct ControllerView {
@@ -124,11 +139,15 @@ inline ControllerView ReadController() {
   ControllerView v;
   const uint32_t c = controller().load(std::memory_order_relaxed);
   if (c == 0) return v;
-  const uint8_t* p = reinterpret_cast<const uint8_t*>(kGuestBase + c);
-  if (!Readable(p) || !Readable(p + kOffCanPressA)) {
+  const uint8_t* p = GuestPtr(c);
+  unsigned long st = 0, prot = 0;
+  if (!p || !Readable(p, &st, &prot) || !Readable(p + kOffCanPressA)) {
     static std::atomic<bool> logged{false};
     if (!logged.exchange(true))
-      REXSYS_WARN("[quick-boot] cannot read the front-end controller at 0x{:08X}", c);
+      REXSYS_WARN(
+          "[quick-boot] cannot read the front-end controller at 0x{:08X} "
+          "(host {}, page state 0x{:X}, protect 0x{:X})",
+          c, static_cast<const void*>(p), st, prot);
     return v;
   }
   const volatile uint8_t* vp = p;
