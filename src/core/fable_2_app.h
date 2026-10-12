@@ -28,6 +28,7 @@
 
 #include "alloc_watch.h"
 #include "dir_manifest_heal.h"
+#include "fable2_address_scan.h"
 #include "fable2_config.h"
 #include "fable2_patches.h"
 // #include "fable2_deadbeef_overlay.h"
@@ -138,6 +139,19 @@ class Fable2App : public rex::ReXApp {
 
   void OnPostSetup() override {
     fable2::branding::Apply(window());
+    // Dog fur Z-fighting fix (docs/RUNTIME_FIXES.md): the shell-fur pixel shader
+    // relies on exact 24-bit depth ties; a small host depth bias restores them.
+    // depth_bias_shader is a GPU-plugin cvar, so it is seeded here too.
+    if (fable2::config::Get().dog_fur_depth_bias &&
+        rex::cvar::GetFlagSource("depth_bias_shader") == rex::cvar::Source::kDefault) {
+      if (rex::cvar::SetFlagByName("depth_bias_shader", "014F8A02DB7B19CA") &&
+          rex::cvar::SetFlagByName("depth_bias_shader_units", "16")) {
+        REXSYS_INFO("[fable2-config] seeded dog fur depth bias (dog_fur_depth_bias=true)");
+      } else {
+        REXSYS_WARN("[fable2-config] dog fur depth bias cvars missing "
+                    "(SDK without depth_bias_shader?)");
+      }
+    }
 
     // Feed the F3 debug overlay with guest FPS (below). The GPU plugin
     // records per-guest-swap frame timing into the shared perf registry
@@ -348,6 +362,9 @@ class Fable2App : public rex::ReXApp {
   // (loaded earlier, in OnPostInitLogging).
   void OnPostLoadXexImage() override {
     fable2::patches::ApplyAll(runtime()->memory(), PPCImageConfig);
+    // Lets the address-scan hook (src/core/fable2_address_scan.cpp) read the
+    // guest page tables.
+    fable2::addressscan::SetMemory(runtime()->memory());
   }
 
   // Startup integrity check: this build was recompiled against a specific

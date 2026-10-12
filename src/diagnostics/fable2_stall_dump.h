@@ -33,22 +33,25 @@ namespace fable2_stall_dump {
 
 inline FILE* slog() {
   static FILE* f = []() -> FILE* {
-    char dir[MAX_PATH] = {0};
-    if (!GetModuleFileNameA(nullptr, dir, MAX_PATH)) return nullptr;
-    char* cut = nullptr;
-    for (char* p = dir + std::strlen(dir) - 1; p >= dir; --p) {
-      if (*p == '\\' || *p == '/') {
-        cut = p;
-        break;
-      }
-    }
-    if (cut) *(cut + 1) = 0;
-    char path[MAX_PATH + 32];
-    snprintf(path, sizeof(path), "%sfable2_stall_dump.log", dir);
-    FILE* out = nullptr;
-    if (fopen_s(&out, path, "w") != 0) return nullptr;
-    setvbuf(out, nullptr, _IONBF, 0);  // tiny writes; must survive TerminateProcess
-    return out;
+    // Release build: don't create the stall-dump log file. sline/dump_threads
+    // are all null-guarded, so the detector stays live but writes nothing.
+    return nullptr;
+    // char dir[MAX_PATH] = {0};
+    // if (!GetModuleFileNameA(nullptr, dir, MAX_PATH)) return nullptr;
+    // char* cut = nullptr;
+    // for (char* p = dir + std::strlen(dir) - 1; p >= dir; --p) {
+    //   if (*p == '\\' || *p == '/') {
+    //     cut = p;
+    //     break;
+    //   }
+    // }
+    // if (cut) *(cut + 1) = 0;
+    // char path[MAX_PATH + 32];
+    // snprintf(path, sizeof(path), "%sfable2_stall_dump.log", dir);
+    // FILE* out = nullptr;
+    // if (fopen_s(&out, path, "w") != 0) return nullptr;
+    // setvbuf(out, nullptr, _IONBF, 0);  // tiny writes; must survive TerminateProcess
+    // return out;
   }();
   return f;
 }

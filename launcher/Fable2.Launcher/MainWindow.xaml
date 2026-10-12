@@ -54,14 +54,21 @@
         <TextBlock Text="RECOMP LAUNCHER" FontSize="13" FontWeight="SemiBold"
                    Foreground="#FFC69A46" Margin="2,3,0,0" />
       </StackPanel>
-      <Border Grid.Column="1" Background="#332A3D36" BorderBrush="#556B887B"
-              BorderThickness="1" CornerRadius="18" Padding="13,7" VerticalAlignment="Center">
-        <TextBlock x:Name="ConfigStateText" Text="Configuration ready" FontSize="12"
-                   Foreground="#FFB9D6C7" />
-      </Border>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+        <Border Background="#332A3D36" BorderBrush="#556B887B"
+                BorderThickness="1" CornerRadius="18" Padding="13,7">
+          <TextBlock x:Name="ConfigStateText" Text="Configuration ready" FontSize="12"
+                     Foreground="#FFB9D6C7" />
+        </Border>
+        <Button x:Name="AdvancedOptionsButton" Content="Advanced Options"
+                Click="AdvancedOptionsClicked" Style="{StaticResource SecondaryButton}"
+                Margin="14,0,0,0" />
+      </StackPanel>
     </Grid>
 
-    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <Grid Grid.Row="1">
+      <!-- Main page content -->
+      <ScrollViewer x:Name="MainContent" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
       <Grid Margin="34,0,34,22">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="3*" />
@@ -219,22 +226,137 @@
           </Border>
         </StackPanel>
       </Grid>
-    </ScrollViewer>
+      </ScrollViewer>
+
+      <!-- Advanced page content (hidden by default) -->
+      <ScrollViewer x:Name="AdvancedContent" Visibility="Collapsed"
+                    VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <Grid Margin="34,0,34,22">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="3*" />
+            <ColumnDefinition Width="18" />
+            <ColumnDefinition Width="2*" />
+          </Grid.ColumnDefinitions>
+
+          <!-- Keybinds -->
+          <StackPanel Grid.Column="0">
+            <Border Style="{StaticResource Panel}">
+              <StackPanel>
+                <TextBlock Text="Keybinds" Style="{StaticResource SectionTitle}" />
+                <TextBlock Text="HOST KEY  →  GUEST INPUT" Style="{StaticResource FieldLabel}" />
+                <StackPanel x:Name="KeybindList" />
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                  <Button Content="+ Add binding" Click="AddKeybindClicked"
+                          Style="{StaticResource SecondaryButton}" MinWidth="120" />
+                  <Button Content="Reset to defaults" Click="ResetKeybindsClicked"
+                          Style="{StaticResource SecondaryButton}" MinWidth="150" Margin="8,0,0,0" />
+                </StackPanel>
+                <TextBlock Text="Click a host-key box, then press the key or mouse button you want to bind (Esc cancels). Changes are saved to fable2_config.toml and take effect the next time the game is launched."
+                           FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,12,0,0"
+                           TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Panel}" Margin="0,18,0,0">
+              <StackPanel>
+                <TextBlock Text="Mouse" Style="{StaticResource SectionTitle}" />
+                <TextBlock Text="Mouse look (camera)" FontWeight="SemiBold" />
+                <TextBlock Text="Map mouse movement to the guest right stick. Disable to keep the cursor free."
+                           FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,3,0,0"
+                           TextWrapping="Wrap" />
+                <CheckBox x:Name="MouseLookCheck" IsChecked="True" Margin="0,10,0,0"
+                          Foreground="{StaticResource TextBrush}" />
+                <Grid Margin="0,16,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="MOUSE SENSITIVITY" Style="{StaticResource FieldLabel}" />
+                    <Slider x:Name="MouseSensitivitySlider" Minimum="1" Maximum="4096" Value="256"
+                            SmallChange="1" LargeChange="64"
+                            ValueChanged="MouseSensitivitySliderChanged" />
+                  </StackPanel>
+                  <TextBox x:Name="MouseSensitivityBox" Grid.Column="2" Width="64" Text="256"
+                           TextAlignment="Center" VerticalContentAlignment="Center"
+                           LostFocus="MouseSensitivityBoxLostFocus" />
+                </Grid>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+          <!-- Patches -->
+          <StackPanel Grid.Column="2">
+            <Border Style="{StaticResource Panel}">
+              <StackPanel>
+                <TextBlock Text="Patches" Style="{StaticResource SectionTitle}" />
+                <TextBlock Text="Recomp-level (mid-asm hook) patches. They take effect the next time the game is launched."
+                           FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,0,14"
+                           TextWrapping="Wrap" />
+                <StackPanel x:Name="PatchList" />
+              </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Panel}" Margin="0,18,0,0">
+              <StackPanel>
+                <TextBlock Text="Performance" Style="{StaticResource SectionTitle}" />
+                <TextBlock Text="Hot-function yield batching. 1 = original (yield every call); larger = fewer context switches; 0 = never yield."
+                           FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,0,10"
+                           TextWrapping="Wrap" />
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="HOTFUNC YIELD EVERY" Style="{StaticResource FieldLabel}" />
+                    <Slider x:Name="HotFuncYieldSlider" Minimum="0" Maximum="16" Value="1"
+                            SmallChange="1" LargeChange="1" IsSnapToTickEnabled="True" TickFrequency="1"
+                            ValueChanged="HotFuncYieldSliderChanged" />
+                  </StackPanel>
+                  <TextBox x:Name="HotFuncYieldBox" Grid.Column="2" Width="56" Text="1"
+                           TextAlignment="Center" VerticalContentAlignment="Center"
+                           LostFocus="HotFuncYieldBoxLostFocus" />
+                </Grid>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </Grid>
+      </ScrollViewer>
+    </Grid>
 
     <Border Grid.Row="2" Background="#E60A1012" BorderBrush="#33FFFFFF" BorderThickness="0,1,0,0">
       <Grid Margin="34,18">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="*" />
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="12" />
-          <ColumnDefinition Width="Auto" />
-        </Grid.ColumnDefinitions>
-        <TextBlock x:Name="StatusText" Text="Select the original game folder containing default.xex and data."
-                   Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
-        <Button Grid.Column="1" Content="Save settings" Click="SaveClicked"
-                Style="{StaticResource SecondaryButton}" MinWidth="125" />
-        <Button Grid.Column="3" x:Name="LaunchButton" Content="Play Fable II" Click="LaunchClicked"
-                Style="{StaticResource PrimaryButton}" MinWidth="175" />
+        <Grid x:Name="MainFooter">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="12" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock x:Name="StatusText" Text="Select the original game folder containing default.xex and data."
+                     Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+          <Button Grid.Column="1" Content="Save settings" Click="SaveClicked"
+                  Style="{StaticResource SecondaryButton}" MinWidth="125" />
+          <Button Grid.Column="3" x:Name="LaunchButton" Content="Play Fable II" Click="LaunchClicked"
+                  Style="{StaticResource PrimaryButton}" MinWidth="175" />
+        </Grid>
+        <Grid x:Name="AdvancedFooter" Visibility="Collapsed">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="12" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock x:Name="AdvancedStatusText" Text=""
+                     Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+          <Button Grid.Column="1" Content="Save advanced settings" Click="SaveAdvancedClicked"
+                  Style="{StaticResource SecondaryButton}" MinWidth="175" />
+          <Button Grid.Column="3" Content="Back to launcher" Click="BackClicked"
+                  Style="{StaticResource PrimaryButton}" MinWidth="155" />
+        </Grid>
       </Grid>
     </Border>
 

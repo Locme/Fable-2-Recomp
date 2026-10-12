@@ -36,6 +36,24 @@ matched source-built Release runtime described in
 [the runtime guide](../docs/RUNTIME_FIXES.md). Higher rates are not a promise
 of correct timing in every scene.
 
+The **Advanced Options** button in the top bar opens a second page for the
+recomp's own settings (stored in `fable2_config.toml` next to `fable_2.exe`,
+separate from the engine's `fable_2.toml`):
+
+- **Keybinds** — the keyboard→gamepad map as a list of editable rows (host key
+  → guest input, with add/remove). Mouse look and mouse sensitivity are also
+  here.
+- **Patches** — a checkbox per recomp-level patch (unlock website/CE, skip
+  intro videos, disable motion blur, realtime texture morphing, hero/dog
+  texture readback, dog-fur depth bias).
+- **Performance** — the hot-function yield-batching factor.
+
+The Save button writes only the managed keys back to `fable2_config.toml`
+non-destructively: it updates keys in place (keeping indentation, spacing and
+inline comments), appends any missing keys or sections, leaves every other key
+and section untouched, and makes a one-time `.launcher-backup` before the first
+write. Keybind and patch changes take effect the next time the game launches.
+
 Dropdowns use dark text on a light background, including the selected item.
 There are no texture/font replacements, remaster switches or save editors.
 The launcher and game use an original project-owned book/tree icon, not
