@@ -6,6 +6,11 @@
 // pulls in keyboard_gamepad.h, which calls fable2::f5lua::poll_f5() per frame).
 #include "fable2_f5_lua.h"
 
+// Photo mode (F6): world freeze, free camera, lens and colour settings,
+// screenshots. Defines strong overrides of three recompiled functions and must
+// come before fable2_state_probe.h (which chains the pad-read override).
+#include "fable2_photo_mode.h"
+
 #include "fable_2_app.h"
 #include "fps_meter.h"
 #include "fable2_text_probe.h"

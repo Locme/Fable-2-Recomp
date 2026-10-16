@@ -20,6 +20,7 @@
 
 #include "fable2_config.h"
 #include "mouse_look.h"  // fable2::mouselook (shared host/guest mouse-delta state)
+#include "photo_mode_state.h"  // fable2::photomode::active (photo mode owns the camera)
 
 // ---------------------------------------------------------------------------
 // Guild chest unlock (fable2.com website items + Collectors Edition content).
@@ -117,7 +118,8 @@ void fable2_hook_disable_motion_blur(PPCRegister& f12) {
     REXSYS_INFO("[motion-blur] game requested full-screen motion blur {:.3f} ({})", f12.f64,
                 disable ? "forced to 0" : "left on");
   }
-  if (disable) {
+  // Photo mode sets the blur itself (its "Screen blur" slider).
+  if (disable && !fable2::photomode::active()) {
     f12.f64 = 0.0;
   }
 }
@@ -201,6 +203,7 @@ bool fable2_hook_high_hf_tick_rate_skip_store() {
 // [input]; mouse_look_camera_diag / mouse_look_camera_dump log the fields so the
 // layout can be confirmed with no rebuild.
 void fable2_hook_direct_mouse_look(PPCRegister& r31) {
+  if (fable2::photomode::active()) return;  // photo mode flies the camera
   const auto& cfg = fable2::config::Get();
   rex::memory::Memory* mem =
       fable2::mouselook::memory_ref().load(std::memory_order_acquire);
