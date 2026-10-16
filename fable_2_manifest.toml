@@ -190,6 +190,14 @@ name = "fable2_hook_cloth_collider_bone"
 registers = ["r1", "r11", "r30"]
 after_instruction = true
 
+# Interpolation test presets (F6): sub_8222E300 blends a character's skeleton
+# between its last two poses with the alpha in f1; the hook runs before
+# `fmr f31,f1` and can force the alpha to 1 (newest pose, no blending).
+[[entrypoint.midasm_hook]]
+address = 0x8222E314
+name = "fable2_hook_pose_blend_alpha"
+registers = ["f1"]
+
 # Dynamic tick rate: the render thread's "draw
 # one LF period in the past" delay uses the smoothed rate, not the per-frame
 # one (sub_8236C520, right after `lfd f0,-27376(r10)`).

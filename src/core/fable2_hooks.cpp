@@ -11,6 +11,7 @@
 // Every patch hook is gated on a toggle in fable2_config.toml ([patches]),
 // consulted on each call, so a patch can be A/B'd without a rebuild.
 
+#include <atomic>
 #include <bit>
 #include <cmath>
 #include <cstring>
@@ -22,6 +23,7 @@
 
 #include <fmt/format.h>
 
+#include "fable2_interpolation.h"
 #include "fable2_patches.h"
 #include "fable2_tick_rate.h"
 #include "fable2_config.h"
@@ -418,16 +420,19 @@ void fable2_hook_realtime_texture_morphing(PPCRegister& r9) {
 // ---------------------------------------------------------------------------
 namespace {
 
-bool InterpolationEnabled() {
-  static const bool enabled = [] {
-    const bool on = fable2::config::Get().interpolation;
-    if (on) {
-      REXSYS_INFO("[interpolation] on: GUI updates every HF tick, cloth "
-                  "colliders blended between poses");
-    }
-    return on;
-  }();
-  return enabled;
+// Test build marker, so a stale exe is obvious in the log.
+constexpr const char* kInterpBuild = "interp-presets-v1";
+
+std::atomic<int> g_preset{-1};
+
+int InitialPreset() {
+  return fable2::config::Get().interpolation ? fable2::interp::kFullPreset : 0;
+}
+
+void LogPreset(int index, const char* why) {
+  REXSYS_INFO("[interpolation] preset {}/{}: {} ({}; F6 = next) [{}]", index,
+              fable2::interp::kPresetCount - 1,
+              fable2::interp::kPresets[index].name, why, kInterpBuild);
 }
 
 uint8_t* GuestMem(uint32_t addr) {
@@ -444,6 +449,37 @@ float LoadF32(uint32_t addr) { return std::bit_cast<float>(LoadU32(addr)); }
 
 }  // namespace
 
+namespace fable2::interp {
+
+int PresetIndex() {
+  int index = g_preset.load(std::memory_order_relaxed);
+  if (index < 0) {
+    int expected = -1;
+    index = InitialPreset();
+    if (g_preset.compare_exchange_strong(expected, index)) {
+      LogPreset(index, "from [patches] interpolation");
+    } else {
+      index = expected;
+    }
+  }
+  return index;
+}
+
+uint32_t Parts() { return kPresets[PresetIndex()].parts; }
+
+bool PollHotkey(bool f6_down) {
+  static bool was_down = false;
+  const bool pressed = f6_down && !was_down;
+  was_down = f6_down;
+  if (!pressed) return false;
+  const int next = (PresetIndex() + 1) % kPresetCount;
+  g_preset.store(next, std::memory_order_relaxed);
+  LogPreset(next, "F6");
+  return true;
+}
+
+}  // namespace fable2::interp
+
 // GUI every HF tick. sub_82278C90 (run on every HF tick from ProcessGameFrame)
 // calls the front-end object's vtable[2] (sub_82286B40: GUI manager update,
 // subtitles, HUD) only when an LF boundary was crossed (r29) or a query says
@@ -452,7 +488,9 @@ float LoadF32(uint32_t addr) { return std::bit_cast<float>(LoadU32(addr)); }
 // it every HF tick does not speed anything up; it only updates text twice as
 // often (every frame with the dynamic tick rate). Returning true jumps to the
 // call at 0x82278D40.
-bool fable2_hook_gui_every_tick() { return InterpolationEnabled(); }
+bool fable2_hook_gui_every_tick() {
+  return fable2::interp::Has(fable2::interp::kGui);
+}
 
 // Cloth colliders blended to the render time. sub_82A895C0 builds the cloth's
 // collision shapes from the driving character's skeleton. Its four loops read
@@ -468,7 +506,7 @@ bool fable2_hook_gui_every_tick() { return InterpolationEnabled(); }
 // so nothing overwrites it in between.
 void fable2_hook_cloth_collider_bone(PPCRegister& r1, PPCRegister& r11,
                                      PPCRegister& r30) {
-  if (!InterpolationEnabled()) return;
+  if (!fable2::interp::Has(fable2::interp::kCloth)) return;
   if (fable2::patches::GuestBase() == nullptr) return;
   const uint32_t inst = r30.u32;
   const uint32_t cur_pose = LoadU32(inst + 512);
@@ -524,7 +562,18 @@ void fable2_hook_cloth_collider_bone(PPCRegister& r1, PPCRegister& r11,
 // drawn. Here the render side gets the smoothed rate (the measured frame rate)
 // instead, so the delay only drifts slowly.
 void fable2_hook_render_time_lf(PPCRegister& f0) {
+  if (!fable2::interp::Has(fable2::interp::kRenderDelay)) return;
   const fable2::tickrate::Plan plan = fable2::tickrate::CurrentPlan();
   if (plan.frames_per_tick == 0) return;
   f0.f64 = plan.hf_hz / 2.0;
+}
+
+// Character pose blending off (test presets only). sub_8222E300 draws a
+// character's skeleton blended between its last two LF poses with the alpha
+// in f1 (callers load it from *(inst+176)+16); `fmr f31,f1` at 0x8222E314
+// keeps it. With kNoPoseBlend the alpha is forced to 1, the newest pose, so
+// characters snap from tick to tick the way they would without the engine's
+// own blending.
+void fable2_hook_pose_blend_alpha(PPCRegister& f1) {
+  if (fable2::interp::Has(fable2::interp::kNoPoseBlend)) f1.f64 = 1.0;
 }
