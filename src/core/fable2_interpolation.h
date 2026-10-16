@@ -21,9 +21,9 @@
 // [R(q) * diag(scale) | translation]. The methods:
 //   kBlendEngine   - the game's own: quaternion lerp + normalize (nlerp);
 //   kBlendSlerp    - spherical lerp: constant rotation speed across the tick;
-//   kBlendMatrix   - "vertex" blend: lerp the finished bone matrices, which is
-//                    the same as lerping each skinned vertex position between
-//                    the two poses (bones can shrink mid-rotation);
+//   kBlendMatrix   - "vertex" style: lerp each bone's finished matrix instead
+//                    of its rotation, so points move in straight lines (bones
+//                    can shrink mid-rotation);
 //   kBlendHalf     - the game's blend at a fixed alpha of 0.5 (ignores time);
 //   kBlendNewest   - no blend, newest pose;
 //   kBlendPrevious - no blend, previous pose (one tick behind).
