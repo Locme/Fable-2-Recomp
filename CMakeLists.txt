@@ -77,6 +77,7 @@ set(FABLE2_SOURCES
     src/core/fable2_config.cpp
     src/core/fable2_patches.cpp
     src/core/fable2_hooks.cpp
+    src/core/fable2_address_scan.cpp
     ${HOTFUNC_SOURCES}
 )
 
@@ -442,6 +443,15 @@ if(WIN32 AND CMAKE_BUILD_TYPE STREQUAL "Release")
           COMMAND ${CMAKE_COMMAND} -E copy_if_different "${FABLE2_TOOLING_RUNTIME_DIR}/rexruntime.dll" "$<TARGET_FILE_DIR:fable_2>/rexruntime.dll"
           COMMAND ${CMAKE_COMMAND} -E copy_if_different "${FABLE2_TOOLING_RUNTIME_DIR}/rexgpu-xenos.dll" "$<TARGET_FILE_DIR:fable_2>/rexgpu-xenos.dll"
           COMMENT "Staging fresh source-built runtime/plugin (out/tooling/runtime-sdk)")
+    endif()
+    # Always stage the ReXGlue runtime/plugin PDBs next to the exe (the
+    # runtime is built Release + -g, so these carry full symbols) so the
+    # debugger/profiler symbolizes ReXGlue code with no manual PDB setup.
+    if(EXISTS "${FABLE2_TOOLING_RUNTIME_DIR}/rexruntime.pdb" AND EXISTS "${FABLE2_TOOLING_RUNTIME_DIR}/rexgpu-xenos.pdb")
+        add_custom_command(TARGET fable_2 POST_BUILD
+          COMMAND ${CMAKE_COMMAND} -E copy_if_different "${FABLE2_TOOLING_RUNTIME_DIR}/rexruntime.pdb" "$<TARGET_FILE_DIR:fable_2>/rexruntime.pdb"
+          COMMAND ${CMAKE_COMMAND} -E copy_if_different "${FABLE2_TOOLING_RUNTIME_DIR}/rexgpu-xenos.pdb" "$<TARGET_FILE_DIR:fable_2>/rexgpu-xenos.pdb"
+          COMMENT "Staging ReXGlue runtime/plugin PDBs (debug symbols)")
     endif()
 endif()
 
