@@ -198,6 +198,20 @@ address = 0x8222E314
 name = "fable2_hook_pose_blend_alpha"
 registers = ["f1"]
 
+# Pose blend methods (F7): before the per-bone blend call `bl 0x8222e5d0` in
+# sub_8222E300 (r3 = previous bone copy, r4 = current bone, f1 = alpha);
+# returning true skips the call. The second hook runs right after the bone
+# matrix is built at r30 (before `b 0x8222e4a4`), for the matrix method.
+[[entrypoint.midasm_hook]]
+address = 0x8222E418
+name = "fable2_hook_pose_blend_method"
+registers = ["r3", "r4", "f1"]
+jump_address_on_true = 0x8222E41C
+[[entrypoint.midasm_hook]]
+address = 0x8222E458
+name = "fable2_hook_pose_blend_matrix"
+registers = ["r30"]
+
 # Dynamic tick rate: the render thread's "draw
 # one LF period in the past" delay uses the smoothed rate, not the per-frame
 # one (sub_8236C520, right after `lfd f0,-27376(r10)`).

@@ -421,9 +421,10 @@ void fable2_hook_realtime_texture_morphing(PPCRegister& r9) {
 namespace {
 
 // Test build marker, so a stale exe is obvious in the log.
-constexpr const char* kInterpBuild = "interp-presets-v1";
+constexpr const char* kInterpBuild = "interp-presets-v2";
 
 std::atomic<int> g_preset{-1};
+std::atomic<int> g_blend_mode{fable2::interp::kBlendEngine};
 
 int InitialPreset() {
   return fable2::config::Get().interpolation ? fable2::interp::kFullPreset : 0;
@@ -466,6 +467,20 @@ int PresetIndex() {
 }
 
 uint32_t Parts() { return kPresets[PresetIndex()].parts; }
+
+int BlendModeIndex() { return g_blend_mode.load(std::memory_order_relaxed); }
+
+bool PollBlendHotkey(bool f7_down) {
+  static bool was_down = false;
+  const bool pressed = f7_down && !was_down;
+  was_down = f7_down;
+  if (!pressed) return false;
+  const int next = (BlendModeIndex() + 1) % kBlendModeCount;
+  g_blend_mode.store(next, std::memory_order_relaxed);
+  REXSYS_INFO("[interpolation] blend method {}/{}: {} (F7 = next) [{}]", next,
+              kBlendModeCount - 1, kBlendModes[next], kInterpBuild);
+  return true;
+}
 
 bool PollHotkey(bool f6_down) {
   static bool was_down = false;
@@ -576,4 +591,143 @@ void fable2_hook_render_time_lf(PPCRegister& f0) {
 // own blending.
 void fable2_hook_pose_blend_alpha(PPCRegister& f1) {
   if (fable2::interp::Has(fable2::interp::kNoPoseBlend)) f1.f64 = 1.0;
+}
+
+// ---------------------------------------------------------------------------
+// Pose blend methods (F7, fable2::interp::kBlendModes). In sub_8222E300 each
+// bone (48 bytes: quaternion, translation, scale; big-endian floats) is
+// copied from the previous pose to a stack buffer (r3), blended toward the
+// current pose's bone (r4) with alpha f1 by `bl 0x8222e5d0` at 0x8222E418,
+// normalized, and turned into a 3x4 bone matrix [R(q) * diag(scale) | t] at
+// r30 by `bl 0x8222e208`. fable2_hook_pose_blend_method runs before that
+// blend call and either lets it run (returns false) or writes its own result
+// to r3 and skips it (returns true). For the matrix method the game's blend
+// runs and fable2_hook_pose_blend_matrix (before `b 0x8222e4a4` at
+// 0x8222E458, right after the matrix is built) overwrites the matrix with
+// the lerp of the two poses' matrices.
+namespace {
+
+struct Bone {
+  float q[4], t[4], s[4];
+};
+
+Bone ReadBone(uint32_t addr) {
+  uint32_t raw[12];
+  std::memcpy(raw, GuestMem(addr), sizeof(raw));
+  float f[12];
+  for (int i = 0; i < 12; ++i) f[i] = std::bit_cast<float>(__builtin_bswap32(raw[i]));
+  Bone b;
+  std::memcpy(&b, f, sizeof(b));
+  return b;
+}
+
+static_assert(sizeof(Bone) == 48);
+
+void WriteFloats(uint32_t addr, const float* v, int n) {
+  uint32_t raw[12];
+  for (int i = 0; i < n; ++i) raw[i] = __builtin_bswap32(std::bit_cast<uint32_t>(v[i]));
+  std::memcpy(GuestMem(addr), raw, sizeof(uint32_t) * n);
+}
+
+void WriteBone(uint32_t addr, const Bone& b) {
+  float f[12];
+  std::memcpy(f, &b, sizeof(f));
+  WriteFloats(addr, f, 12);
+}
+
+// 3x4 row-major [R(q) * diag(s) | t], as sub_8222E208 builds it.
+void BoneMatrix(const Bone& b, float m[12]) {
+  const float x = b.q[0], y = b.q[1], z = b.q[2], w = b.q[3];
+  const float r[3][3] = {
+      {1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)},
+      {2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)},
+      {2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)},
+  };
+  for (int row = 0; row < 3; ++row) {
+    for (int col = 0; col < 3; ++col) m[row * 4 + col] = r[row][col] * b.s[col];
+    m[row * 4 + 3] = b.t[row];
+  }
+}
+
+void Normalize4(float q[4]) {
+  const float len_sq = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3];
+  if (len_sq > 1e-12f) {
+    const float inv = 1.0f / std::sqrt(len_sq);
+    for (int i = 0; i < 4; ++i) q[i] *= inv;
+  }
+}
+
+// The matrix method's inputs, from the blend hook to the matrix hook (same
+// thread, same bone).
+struct PendingMatrix {
+  bool valid = false;
+  Bone prev, cur;
+  float alpha = 0.0f;
+};
+thread_local PendingMatrix t_pending;
+
+}  // namespace
+
+bool fable2_hook_pose_blend_method(PPCRegister& r3, PPCRegister& r4, PPCRegister& f1) {
+  using namespace fable2::interp;
+  const int mode = BlendModeIndex();
+  if (mode == kBlendEngine || fable2::patches::GuestBase() == nullptr) return false;
+  if (mode == kBlendHalf) {
+    f1.f64 = 0.5;
+    return false;
+  }
+  if (mode == kBlendPrevious) return true;  // r3 already holds the previous bone
+  const Bone cur = ReadBone(r4.u32);
+  if (mode == kBlendNewest) {
+    WriteBone(r3.u32, cur);
+    return true;
+  }
+  const Bone prev = ReadBone(r3.u32);
+  float alpha = static_cast<float>(f1.f64);
+  if (!(alpha >= 0.0f)) alpha = 0.0f;  // also NaN
+  if (alpha > 1.0f) alpha = 1.0f;
+  if (mode == kBlendMatrix) {
+    t_pending.valid = true;
+    t_pending.prev = prev;
+    t_pending.cur = cur;
+    t_pending.alpha = alpha;
+    return false;  // the game's blend still builds a matrix to overwrite
+  }
+  // kBlendSlerp.
+  Bone out = prev;
+  float b[4] = {cur.q[0], cur.q[1], cur.q[2], cur.q[3]};
+  float dot = prev.q[0] * b[0] + prev.q[1] * b[1] + prev.q[2] * b[2] + prev.q[3] * b[3];
+  if (dot < 0.0f) {
+    dot = -dot;
+    for (float& v : b) v = -v;
+  }
+  float wa = 1.0f - alpha, wb = alpha;
+  if (dot < 0.9995f) {
+    const float theta = std::acos(dot);
+    const float sin_theta = std::sin(theta);
+    wa = std::sin((1.0f - alpha) * theta) / sin_theta;
+    wb = std::sin(alpha * theta) / sin_theta;
+  }
+  for (int i = 0; i < 4; ++i) out.q[i] = wa * prev.q[i] + wb * b[i];
+  Normalize4(out.q);
+  for (int i = 0; i < 4; ++i) {
+    out.t[i] = prev.t[i] + (cur.t[i] - prev.t[i]) * alpha;
+    out.s[i] = prev.s[i] + (cur.s[i] - prev.s[i]) * alpha;
+  }
+  WriteBone(r3.u32, out);
+  return true;
+}
+
+void fable2_hook_pose_blend_matrix(PPCRegister& r30) {
+  if (!t_pending.valid) return;
+  t_pending.valid = false;
+  if (fable2::interp::BlendModeIndex() != fable2::interp::kBlendMatrix) return;
+  Bone prev = t_pending.prev, cur = t_pending.cur;
+  Normalize4(prev.q);
+  Normalize4(cur.q);
+  float a[12], b[12], m[12];
+  BoneMatrix(prev, a);
+  BoneMatrix(cur, b);
+  for (int i = 0; i < 12; ++i) m[i] = a[i] + (b[i] - a[i]) * t_pending.alpha;
+  WriteFloats(r30.u32, m, 12);
 }

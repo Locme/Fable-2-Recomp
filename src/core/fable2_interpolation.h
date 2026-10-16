@@ -11,9 +11,22 @@
 //   kNoPoseBlend - the game's OWN character pose blending is switched off
 //                  (fable2_hook_pose_blend_alpha forces the blend to the
 //                  newest pose). Only in a test preset, never by default.
-// The hooks live in fable2_hooks.cpp. F6 cycles the presets (Presets()); the
+// The hooks live in fable2_hooks.cpp. F6 cycles the presets (kPresets); the
 // log shows each change as "[interpolation] preset N/M: ...", and the window
 // title shows the active preset (src/input/keyboard_gamepad.h).
+//
+// F7 cycles the character pose blend METHOD (kBlendModes), independently of
+// the preset. sub_8222E300 blends each bone (quaternion, translation, scale)
+// between the previous and current pose and turns it into a 3x4 bone matrix
+// [R(q) * diag(scale) | translation]. The methods:
+//   kBlendEngine   - the game's own: quaternion lerp + normalize (nlerp);
+//   kBlendSlerp    - spherical lerp: constant rotation speed across the tick;
+//   kBlendMatrix   - "vertex" blend: lerp the finished bone matrices, which is
+//                    the same as lerping each skinned vertex position between
+//                    the two poses (bones can shrink mid-rotation);
+//   kBlendHalf     - the game's blend at a fixed alpha of 0.5 (ignores time);
+//   kBlendNewest   - no blend, newest pose;
+//   kBlendPrevious - no blend, previous pose (one tick behind).
 
 #pragma once
 
@@ -44,6 +57,20 @@ inline constexpr Preset kPresets[] = {
 inline constexpr int kPresetCount = sizeof(kPresets) / sizeof(kPresets[0]);
 inline constexpr int kFullPreset = 4;
 
+enum BlendMode : int {
+  kBlendEngine,
+  kBlendSlerp,
+  kBlendMatrix,
+  kBlendHalf,
+  kBlendNewest,
+  kBlendPrevious,
+  kBlendModeCount,
+};
+inline constexpr const char* kBlendModes[kBlendModeCount] = {
+    "Game default (nlerp)", "Slerp",  "Vertex (matrix lerp)",
+    "Fixed halfway",        "Newest pose", "Previous pose",
+};
+
 // Active parts (any thread, cheap).
 uint32_t Parts();
 inline bool Has(uint32_t part) { return (Parts() & part) != 0; }
@@ -54,5 +81,9 @@ int PresetIndex();
 // Host input poll, once per frame while the game window is focused, with the
 // F6 key state: a press selects the next preset. Returns true on a switch.
 bool PollHotkey(bool f6_down);
+
+// Active blend method, and the F7 poll (same contract as PollHotkey).
+int BlendModeIndex();
+bool PollBlendHotkey(bool f7_down);
 
 }  // namespace fable2::interp

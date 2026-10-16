@@ -285,16 +285,20 @@ class KeyboardGamepadDriver final : public rex::input::InputDriver {
       unlock_down_prev_ = unlock_down;
     }
 
-    // F6 (host) -> next interpolation test preset (fable2_interpolation.h),
-    // shown in the window title.
-    if (focused && fable2::interp::PollHotkey((GetAsyncKeyState(VK_F6) & 0x8000) != 0) &&
-        win) {
-      const int index = fable2::interp::PresetIndex();
-      std::string title = "Fable 2 Recompiled - Interpolation preset " +
-                          std::to_string(index) + ": " +
-                          fable2::interp::kPresets[index].name;
-      win->app_context().CallInUIThreadDeferred(
-          [win, title = std::move(title)] { win->SetTitle(title); });
+    // F6 / F7 (host) -> next interpolation test preset / pose blend method
+    // (fable2_interpolation.h), shown in the window title.
+    if (focused) {
+      const bool f6 = fable2::interp::PollHotkey((GetAsyncKeyState(VK_F6) & 0x8000) != 0);
+      const bool f7 =
+          fable2::interp::PollBlendHotkey((GetAsyncKeyState(VK_F7) & 0x8000) != 0);
+      if ((f6 || f7) && win) {
+        const int index = fable2::interp::PresetIndex();
+        std::string title = "Fable 2 Recompiled - Preset " + std::to_string(index) + ": " +
+                            fable2::interp::kPresets[index].name + " | Blend: " +
+                            fable2::interp::kBlendModes[fable2::interp::BlendModeIndex()];
+        win->app_context().CallInUIThreadDeferred(
+            [win, title = std::move(title)] { win->SetTitle(title); });
+      }
     }
 
     if (focused) {
