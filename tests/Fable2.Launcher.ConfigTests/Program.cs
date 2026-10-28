@@ -96,6 +96,37 @@ try
     Require(LauncherConfigFile.ReadValues(tablePath)["vsync"] == "false", "root value not loaded");
     Console.WriteLine("Graphics options, anti-aliasing and table preservation passed.");
 
+    string patchesPath = Path.Combine(testDirectory, PatchSettings.ConfigFileName);
+    File.Copy(Path.Combine(AppContext.BaseDirectory, "TestData", "fable2_config.toml"), patchesPath);
+    string patchesOriginal = File.ReadAllText(patchesPath);
+    Dictionary<string, string> patchDefaults = LauncherConfigFile.ReadSectionValues(patchesPath, PatchSettings.Section);
+    foreach (string key in PatchSettings.ManagedKeys)
+        Require(patchDefaults[key] == "false", "shipped patch default changed: " + key);
+    LauncherConfigFile.WriteSectionValues(patchesPath, PatchSettings.Section,
+        PatchSettings.Create(true, true), PatchSettings.ManagedKeys);
+    Dictionary<string, string> patchesOn = LauncherConfigFile.ReadSectionValues(patchesPath, PatchSettings.Section);
+    Require(patchesOn["disable_motion_blur"] == "true" && patchesOn["skip_intro_videos"] == "true", "patch toggles not saved");
+    string[] beforeLines = patchesOriginal.Replace("\r\n", "\n").Split('\n');
+    string[] afterLines = File.ReadAllText(patchesPath).Replace("\r\n", "\n").Split('\n');
+    Require(beforeLines.Length == afterLines.Length, "patch save added or removed lines");
+    Require(beforeLines.Zip(afterLines).Count(pair => pair.First != pair.Second) == 2, "patch save changed unrelated lines");
+    LauncherConfigFile.WriteSectionValues(patchesPath, PatchSettings.Section,
+        PatchSettings.Create(false, false), PatchSettings.ManagedKeys);
+    Require(File.ReadAllText(patchesPath).Replace("\r\n", "\n") == patchesOriginal.Replace("\r\n", "\n"), "patch roundtrip changed the file");
+
+    string sectionPath = Path.Combine(testDirectory, "sections.toml");
+    File.WriteAllText(sectionPath, "[general]\nskip_intro_videos = keep\n\n[perf]\nx = 1\n");
+    LauncherConfigFile.WriteSectionValues(sectionPath, PatchSettings.Section,
+        PatchSettings.Create(true, false), PatchSettings.ManagedKeys);
+    Require(LauncherConfigFile.ReadSectionValues(sectionPath, "general")["skip_intro_videos"] == "keep", "other section modified");
+    Require(LauncherConfigFile.ReadSectionValues(sectionPath, PatchSettings.Section)["disable_motion_blur"] == "true", "missing section not appended");
+    File.WriteAllText(sectionPath, "[patches]\nunlock_ce = true\n\n[perf]\nx = 1\n");
+    LauncherConfigFile.WriteSectionValues(sectionPath, PatchSettings.Section,
+        PatchSettings.Create(false, true), PatchSettings.ManagedKeys);
+    string sectionContent = File.ReadAllText(sectionPath).Replace("\r\n", "\n");
+    Require(sectionContent.Contains("unlock_ce = true\ndisable_motion_blur = false\nskip_intro_videos = true\n\n[perf]"), "missing keys not appended inside section");
+    Console.WriteLine("Patch toggles (fable2_config.toml [patches]) roundtrip passed.");
+
     string appXaml = Path.Combine(AppContext.BaseDirectory, "TestData", "App.xaml");
     XNamespace xamlNamespace = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
     var styles = XDocument.Load(appXaml).Descendants(xamlNamespace + "Style").ToList();
