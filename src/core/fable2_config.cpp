@@ -293,14 +293,14 @@ dog_fur_depth_bias = true
 
 # Terrain Tessellation on CPU (SDK cvar terrain_tess_cpu): compute the terrain's
 # tessellation factors on the CPU so the game does not wait every frame for the
-# GPU to read them back. The draw still runs on the GPU. D3D12 only.
+# GPU to read them back. The draw still runs on the GPU. D3D12 and Vulkan.
 # false = wait for the GPU, as original.
 # Default: true
 terrain_tess_cpu = true
 
 # Skinning on CPU (SDK cvar skinning_cpu): compute the vertices the game skins
 # with memexport shader F6C546D6C2645541 on the CPU, which removes another wait
-# for the GPU every frame. The draw still runs on the GPU. D3D12 only.
+# for the GPU every frame. The draw still runs on the GPU. D3D12 and Vulkan.
 # false = wait for the GPU, as original.
 # Default: true
 skinning_cpu = true

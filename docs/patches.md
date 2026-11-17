@@ -186,3 +186,23 @@ passes through. Checked against `exp2f` from -inf to +inf (only results below
 range case. The SDK build stages a new `rexglue.exe`, which clears the codegen
 stamp, so the next build regenerates all recompiled code with the fix. This is
 a correctness fix in generated code, so it has no toggle.
+
+### Memexport readback on Vulkan (CPU skinning and terrain tessellation)
+
+Fable II skins some characters and computes terrain tessellation factors with
+memexport vertex shaders, and the game reads their output back on the CPU.
+Master's `skinning_cpu` and `terrain_tess_cpu` compute those two shaders' output
+on the CPU so the draw doesn't wait for the GPU to read it back, but they were
+only wired into the D3D12 backend. On Vulkan every such draw still ended the
+submission and waited on a fence (with `readback_memexport_fast = false`, which
+the app sets when both options are on) or, by default, handed the game the
+previous result. The CPU implementations don't depend on D3D12: they now live
+in the shared GPU code (`src/graphics/fable2_skinning.cpp`,
+`fable2_terrain_tess.cpp`, namespace `rex::graphics`), the two cvars are shared
+GPU cvars, and the Vulkan draw path uses them the same way D3D12 does (the draw
+still runs; only the readback is skipped). In Bowerstone on Vulkan, with both
+options on, about 1,230 memexport draws per second are computed on the CPU and
+0 are read back; with them off and synchronous readback, all of them wait on a
+fence. Uncapped (`vsync = false`), the options were 3-10x faster than sync
+readback in every paired run (29 vs 3, 89 vs 30 and 82 vs 25 fps; absolute
+numbers varied between rounds). At 30 fps pacing both hold 30 fps. D3D12 is unchanged.
